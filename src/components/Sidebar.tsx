@@ -67,7 +67,7 @@ export default function Sidebar({ currentView, onViewChange, darkMode }: Sidebar
               placeholder="Search courses, files..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 bg-input-background"
+              className="pl-9 bg-input-background border-white focus-visible:border-white focus-visible:ring-white/40"
             />
           </div>
         </div>

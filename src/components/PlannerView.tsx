@@ -11,6 +11,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { applyAlpha } from '../lib/colorUtils';
+import { HighlightedSection } from './HighlightedSection';
 
 interface Task {
   id: string;
@@ -227,7 +228,7 @@ export default function PlannerView() {
         {/* To-Do List */}
         <div className="lg:col-span-2 space-y-4">
           {/* Upcoming Tasks */}
-          <Card className="p-4">
+          <HighlightedSection innerClassName="space-y-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-foreground">To-Do List</h3>
               <div className="flex items-center gap-2">
@@ -442,10 +443,10 @@ export default function PlannerView() {
                 </div>
               </div>
             )}
-          </Card>
+          </HighlightedSection>
 
           {/* Weekly Schedule */}
-          <Card className="p-4">
+          <HighlightedSection innerClassName="space-y-2">
             <h3 className="text-foreground mb-3">AI-Generated Weekly Study Schedule</h3>
             <div className="space-y-2">
               {weeklyPlan.map((plan) => (
@@ -471,13 +472,13 @@ export default function PlannerView() {
                 </div>
               ))}
             </div>
-          </Card>
+          </HighlightedSection>
         </div>
 
         {/* Sidebar - Study Stats & Insights */}
         <div className="space-y-4">
           {/* This Week Stats */}
-          <Card className="p-4">
+          <HighlightedSection innerClassName="space-y-3">
             <h3 className="text-foreground mb-3">This Week</h3>
             <div className="space-y-3">
               <div className="flex items-start gap-2">
@@ -510,10 +511,10 @@ export default function PlannerView() {
                 </div>
               </div>
             </div>
-          </Card>
+          </HighlightedSection>
 
           {/* AI Suggestions */}
-          <Card className="p-4">
+          <HighlightedSection innerClassName="space-y-2">
             <div className="flex items-center gap-2 mb-3">
               <Brain className="h-4 w-4 text-primary" />
               <h3 className="text-foreground">Smart Suggestions</h3>
@@ -530,9 +531,10 @@ export default function PlannerView() {
                 </p>
               </div>
             </div>
-          </Card>
+          </HighlightedSection>
         </div>
       </div>
     </div>
   );
 }
+

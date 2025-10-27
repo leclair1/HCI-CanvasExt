@@ -93,26 +93,43 @@ export default function CoursePage({ courseId, onNavigateToFlashcards, onNavigat
       </div>
 
       {/* AI Study Tools Banner */}
-      <Card className="p-6 mb-6 bg-gradient-to-r from-primary/5 to-chart-2/5 border-primary/20">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
-            <Sparkles className="h-6 w-6 text-primary" />
+      <Card className="relative overflow-hidden p-6 mb-6 border border-primary/30 bg-gradient-to-r from-primary/25 via-sky-500/15 to-purple-500/15 shadow-[0_32px_80px_-32px_rgba(56,189,248,0.55)]">
+        <div className="pointer-events-none absolute inset-0 opacity-60 bg-[radial-gradient(at_top_left,_rgba(56,189,248,0.35),transparent_55%),radial-gradient(at_bottom_right,_rgba(168,85,247,0.38),transparent_55%)]" />
+        <div className="relative flex items-start gap-4">
+          <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary via-sky-400/80 to-purple-500/80 shadow-[0_24px_50px_-28px_rgba(56,189,248,0.65)] flex items-center justify-center shrink-0">
+            <Sparkles className="h-7 w-7 text-primary-foreground drop-shadow-[0_8px_18px_rgba(15,23,42,0.35)]" />
           </div>
           <div className="flex-1">
-            <h3 className="text-foreground mb-2">Smart Study Tools Available</h3>
-            <p className="text-sm text-muted-foreground mb-4">
+            <h3 className="text-lg font-semibold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-primary via-sky-500 to-purple-500 mb-2">
+              Smart Study Tools Available
+            </h3>
+            <p className="text-sm text-primary/85 dark:text-primary-foreground/80 mb-4">
               AI can automatically generate study materials from your course content, syllabus, and lecture notes.
             </p>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" onClick={() => handleGenerateStudyMaterials('Flashcards')}>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                size="sm"
+                className="bg-gradient-to-r from-primary via-sky-500 to-purple-500 text-primary-foreground shadow-[0_18px_44px_-20px_rgba(56,189,248,0.65)] hover:shadow-[0_24px_58px_-20px_rgba(56,189,248,0.7)]"
+                onClick={() => handleGenerateStudyMaterials('Flashcards')}
+              >
                 <Brain className="h-4 w-4 mr-2" />
                 Flashcards
               </Button>
-              <Button size="sm" variant="outline" onClick={() => handleGenerateStudyMaterials('Summary')}>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="bg-gradient-to-r from-sky-400/90 to-violet-500/90 text-white shadow-[0_18px_40px_-18px_rgba(167,139,250,0.6)] hover:shadow-[0_24px_52px_-18px_rgba(167,139,250,0.7)]"
+                onClick={() => handleGenerateStudyMaterials('Summary')}
+              >
                 <FileText className="h-4 w-4 mr-2" />
                 Summary
               </Button>
-              <Button size="sm" variant="outline" onClick={() => handleGenerateStudyMaterials('Quiz')}>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="bg-gradient-to-r from-emerald-400/90 to-sky-500/90 text-white shadow-[0_20px_46px_-18px_rgba(16,185,129,0.65)] hover:shadow-[0_26px_58px_-18px_rgba(16,185,129,0.7)]"
+                onClick={() => handleGenerateStudyMaterials('Quiz')}
+              >
                 <CheckCircle2 className="h-4 w-4 mr-2" />
                 Practice Quiz
               </Button>

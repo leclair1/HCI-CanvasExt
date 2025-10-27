@@ -8,6 +8,7 @@ import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Label } from './ui/label';
 import svgPaths from "../imports/svg-ktd1c8hcfk";
 import imgAiTutorLogo from "figma:asset/831d76f506f1dc02aaa78fa1316452543accee12.png";
+import { HighlightedSection } from './HighlightedSection';
 import { mockCourseMaterials, mockCourseContent, getCourseColor, mockCourses } from '../lib/mockData';
 
 interface Message {
@@ -557,75 +558,83 @@ export default function AITutorView({ onBack }: AITutorViewProps) {
   if (!selectedCourse) {
     return (
       <div className="min-h-screen bg-white">
-        <div className="max-w-[856px] mx-auto px-4 py-6">
-          {/* Header */}
-          <div className="flex items-center gap-4 mb-12">
-            <div className="bg-[rgba(3,2,19,0.1)] rounded-[10px] w-12 h-12 flex items-center justify-center shrink-0">
-              <img
-                src={imgAiTutorLogo}
-                alt="AI Tutor"
-                className="w-[33px] h-[33px] object-cover"
-              />
-            </div>
-            <div>
-              <h1 className="text-neutral-950 mb-0">AI Tutor</h1>
-              <p className="text-[#717182] text-sm">
-                Select a course to get started
-              </p>
-            </div>
-          </div>
-
-          {/* Course Selection Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {COURSE_IDS.map((courseId) => {
-              const color = getCourseColor(courseId);
-              const Icon = COURSE_ICONS[courseId];
-              const { code, name } = courseInfo[courseId];
-
-              return (
-                <button
-                  type="button"
-                  key={courseId}
-                  onClick={() => handleSelectCourse(courseId)}
-                  className="group border-2 border-[rgba(0,0,0,0.1)] rounded-[14px] p-8 hover:shadow-lg text-left transition-all overflow-hidden relative"
-                  style={{ borderColor: 'rgba(0,0,0,0.1)' }}
-                  onMouseEnter={(event) => {
-                    event.currentTarget.style.borderColor = color.primary;
-                  }}
-                  onMouseLeave={(event) => {
-                    event.currentTarget.style.borderColor = 'rgba(0,0,0,0.1)';
-                  }}
-                >
-                  <div
-                    className="absolute top-0 left-0 right-0 h-1"
-                    style={{ backgroundColor: color.primary }}
+        <div className="px-4 py-10">
+          <HighlightedSection
+            className="mx-auto max-w-[1040px] p-0 md:p-0 lg:p-0"
+            innerClassName="relative w-full overflow-hidden rounded-3xl border border-[rgba(10,10,10,0.08)] bg-white/95 shadow-[0_55px_120px_-60px_rgba(15,23,42,0.45)] backdrop-blur-sm"
+          >
+            <div className="pointer-events-none absolute inset-0 rounded-3xl border border-white/60 opacity-70 mix-blend-overlay" />
+            <div className="relative px-8 py-8 md:px-10 md:py-10">
+              {/* Header */}
+              <div className="flex items-center gap-4 mb-12">
+                <div className="bg-[rgba(3,2,19,0.1)] rounded-[10px] w-12 h-12 flex items-center justify-center shrink-0">
+                  <img
+                    src={imgAiTutorLogo}
+                    alt="AI Tutor"
+                    className="w-[33px] h-[33px] object-cover"
                   />
-
-                  <div className="flex items-center gap-4 mb-4">
-                    <div
-                      className="rounded-[10px] w-16 h-16 flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: color.primary }}
-                    >
-                      <Icon className="w-8 h-8 text-white" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <div
-                          className="w-2 h-2 rounded-full"
-                          style={{ backgroundColor: color.primary }}
-                        />
-                        <h2 className="text-neutral-950">{code}</h2>
-                      </div>
-                      <p className="text-[#717182] text-sm">{name}</p>
-                    </div>
-                  </div>
-                  <p className="text-sm text-neutral-950 opacity-70">
-                    {COURSE_DESCRIPTIONS[courseId]}
+                </div>
+                <div>
+                  <h1 className="text-neutral-950 mb-0">AI Tutor</h1>
+                  <p className="text-[#717182] text-sm">
+                    Select a course to get started
                   </p>
-                </button>
-              );
-            })}
-          </div>
+                </div>
+              </div>
+
+              {/* Course Selection Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {COURSE_IDS.map((courseId) => {
+                  const color = getCourseColor(courseId);
+                  const Icon = COURSE_ICONS[courseId];
+                  const { code, name } = courseInfo[courseId];
+
+                  return (
+                    <button
+                      type="button"
+                      key={courseId}
+                      onClick={() => handleSelectCourse(courseId)}
+                      className="group border-2 border-[rgba(0,0,0,0.1)] rounded-[18px] p-8 hover:shadow-[0_30px_70px_-40px_rgba(15,23,42,0.45)] text-left transition-all overflow-hidden relative bg-white/90"
+                      style={{ borderColor: 'rgba(0,0,0,0.1)' }}
+                      onMouseEnter={(event) => {
+                        event.currentTarget.style.borderColor = color.primary;
+                      }}
+                      onMouseLeave={(event) => {
+                        event.currentTarget.style.borderColor = 'rgba(0,0,0,0.1)';
+                      }}
+                    >
+                      <div
+                        className="absolute top-0 left-0 right-0 h-1"
+                        style={{ backgroundColor: color.primary }}
+                      />
+
+                      <div className="flex items-center gap-4 mb-4">
+                        <div
+                          className="rounded-[12px] w-16 h-16 flex items-center justify-center shrink-0 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.5)]"
+                          style={{ backgroundColor: color.primary }}
+                        >
+                          <Icon className="w-8 h-8 text-white" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <div
+                              className="w-2 h-2 rounded-full"
+                              style={{ backgroundColor: color.primary }}
+                            />
+                            <h2 className="text-neutral-950 text-lg font-semibold">{code}</h2>
+                          </div>
+                          <p className="text-[#717182] text-sm">{name}</p>
+                        </div>
+                      </div>
+                      <p className="text-sm text-neutral-950/80">
+                        {COURSE_DESCRIPTIONS[courseId]}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </HighlightedSection>
         </div>
       </div>
     );
@@ -634,9 +643,15 @@ export default function AITutorView({ onBack }: AITutorViewProps) {
   // Show chat interface after course is selected
   return (
     <div className="min-h-screen bg-white">
-      <div className="max-w-[1200px] mx-auto px-4 py-6">
-        {/* Back Button */}
-        <button
+      <div className="px-4 py-10">
+        <HighlightedSection
+          className="mx-auto max-w-[1040px] p-0 md:p-0 lg:p-0"
+          innerClassName="relative w-full overflow-hidden rounded-3xl border border-[rgba(10,10,10,0.08)] bg-white/95 shadow-[0_65px_140px_-70px_rgba(15,23,42,0.5)] backdrop-blur-sm"
+        >
+          <div className="pointer-events-none absolute inset-0 rounded-3xl border border-white/60 opacity-70 mix-blend-overlay" />
+          <div className="relative px-6 sm:px-8 lg:px-12 py-8 lg:py-12">
+            {/* Back Button */}
+            <button
           type="button"
           onClick={handleBackToSelection}
           className="flex items-center gap-2 mb-6 text-sm text-neutral-950 hover:opacity-70 transition-opacity"
@@ -680,12 +695,11 @@ export default function AITutorView({ onBack }: AITutorViewProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="flex flex-col gap-10">
           {/* Main Chat Area */}
-          <div className="lg:col-span-2">
-            {/* Tabs */}
-            <Tabs defaultValue="chat" className="w-full">
-              <TabsList className="w-full bg-[#ececf0] h-[35px] rounded-[14px] p-0.5 mb-6">
+          <section className="space-y-6">
+            <Tabs defaultValue="chat" className="w-full space-y-6">
+              <TabsList className="w-full bg-[#ececf0] h-[35px] rounded-[14px] p-0.5">
                 <TabsTrigger
                   value="chat"
                   className="flex-1 h-[29px] rounded-[14px] data-[state=active]:bg-white data-[state=active]:text-neutral-950 text-neutral-950"
@@ -917,11 +931,11 @@ export default function AITutorView({ onBack }: AITutorViewProps) {
                 </div>
               </TabsContent>
             </Tabs>
-          </div>
+          </section>
 
-          {/* Sidebar - Available Materials */}
-          <div className="space-y-4">
-            <div className="bg-white border border-[rgba(0,0,0,0.1)] rounded-[14px] p-4">
+          {/* Supplemental Sections */}
+          <section className="space-y-4">
+            <div className="bg-white border border-[rgba(0,0,0,0.1)] rounded-[14px] p-4 shadow-[0_24px_60px_-45px_rgba(15,23,42,0.35)]">
               <div className="flex items-center gap-2 mb-4">
                 <BookOpen className="w-4 h-4 text-[#030213]" />
                 <h3 className="text-neutral-950">Available Materials</h3>
@@ -945,7 +959,7 @@ export default function AITutorView({ onBack }: AITutorViewProps) {
             </div>
 
             {/* Key Topics */}
-            <div className="bg-white border border-[rgba(0,0,0,0.1)] rounded-[14px] p-4">
+            <div className="bg-white border border-[rgba(0,0,0,0.1)] rounded-[14px] p-4 shadow-[0_24px_60px_-45px_rgba(59,130,246,0.35)]">
               <div className="flex items-center gap-2 mb-4">
                 <FileText className="w-4 h-4 text-[#030213]" />
                 <h3 className="text-neutral-950">Key Topics</h3>
@@ -960,20 +974,22 @@ export default function AITutorView({ onBack }: AITutorViewProps) {
             </div>
 
             {/* Quick Tips */}
-            <div className="bg-white border border-[rgba(0,0,0,0.1)] rounded-[14px] p-4">
+            <div className="bg-white border border-[rgba(0,0,0,0.1)] rounded-[14px] p-4 shadow-[0_24px_60px_-50px_rgba(5,150,105,0.45)]">
               <div className="flex items-center gap-2 mb-4">
                 <AlertCircle className="w-4 h-4 text-[#030213]" />
                 <h3 className="text-neutral-950">Tips</h3>
               </div>
               <div className="space-y-2 text-xs text-[#717182]">
-                <p>• Ask specific questions about course topics</p>
-                <p>• Reference module names for context</p>
-                <p>• Request explanations or examples</p>
+                <p>- Ask specific questions about course topics</p>
+                <p>- Reference module names for context</p>
+                <p>- Request explanations or examples</p>
               </div>
             </div>
-          </div>
+          </section>
         </div>
       </div>
-    </div>
+    </HighlightedSection>
+  </div>
+</div>
   );
 }

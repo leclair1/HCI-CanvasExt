@@ -37,6 +37,7 @@ import {
   initializeSampleData 
 } from '../lib/studyTimeStore';
 import { getCourseColor } from '../lib/mockData';
+import { HighlightedSection } from './HighlightedSection';
 
 export default function InsightsView() {
   const [studyTimeData, setStudyTimeData] = useState<Array<{ course: string; courseId: string; hours: number }>>([]);
@@ -170,13 +171,13 @@ export default function InsightsView() {
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="mb-4">
-        <h1 className="text-foreground mb-1">Study Insights</h1>
-        <p className="text-muted-foreground">
-          Track your learning progress, study patterns, and performance metrics
-        </p>
-      </div>
+      <HighlightedSection innerClassName="space-y-8">
+        <div>
+          <h1 className="text-foreground mb-1">Study Insights</h1>
+          <p className="text-muted-foreground">
+            Track your learning progress, study patterns, and performance metrics
+          </p>
+        </div>
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -414,6 +415,7 @@ export default function InsightsView() {
           </Card>
         </div>
       </div>
-    </div>
-  );
+    </HighlightedSection>
+  </div>
+);
 }

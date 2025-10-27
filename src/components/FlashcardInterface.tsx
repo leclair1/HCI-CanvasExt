@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { mockFlashcards, mockQuizQuestions, mockFlashcardsByCourse, mockCourses, getCourseColor } from '../lib/mockData';
 import { Checkbox } from './ui/checkbox';
 import { applyAlpha } from '../lib/colorUtils';
+import { HighlightedSection } from './HighlightedSection';
 
 interface FlashcardInterfaceProps {
   onBack: () => void;
@@ -153,9 +154,11 @@ export default function FlashcardInterface({ onBack }: FlashcardInterfaceProps) 
       : null;
 
     return (
-      <div className="p-4 md:p-8 max-w-4xl mx-auto">
+      <div className="relative w-full max-w-4xl mx-auto border border-white/10 rounded-[28px] bg-black/5 backdrop-blur-sm shadow-[0_45px_90px_-45px_rgba(15,23,42,0.55)] px-4 sm:px-8 py-8 space-y-6">
+        <div className="pointer-events-none absolute inset-0 rounded-[28px] border border-white/15 opacity-60" />
+        <div className="relative space-y-6">
         {/* Header */}
-        <div className="mb-6">
+        <div className="space-y-4">
           <Button
             variant="ghost"
             onClick={(event) => {
@@ -163,9 +166,9 @@ export default function FlashcardInterface({ onBack }: FlashcardInterfaceProps) 
               event.stopPropagation();
               onBack();
             }}
-            className="mb-4"
+            className="self-start flex items-center gap-2 text-sm font-medium"
           >
-            <ArrowLeft className="h-4 w-4 mr-2" />
+            <ArrowLeft className="h-4 w-4" />
             Back to Dashboard
           </Button>
           
@@ -184,7 +187,7 @@ export default function FlashcardInterface({ onBack }: FlashcardInterfaceProps) 
 
         {/* Course Selection */}
         {!selectedCourse ? (
-          <div className="space-y-4">
+          <HighlightedSection innerClassName="space-y-6">
             <div className="mb-4">
               <h2 className="text-foreground mb-2">Choose a Course</h2>
               <p className="text-sm text-muted-foreground">
@@ -205,7 +208,7 @@ export default function FlashcardInterface({ onBack }: FlashcardInterfaceProps) 
                 return (
                   <Card
                     key={course.id}
-                    className="p-6 cursor-pointer border border-transparent transition-all hover:-translate-y-1 hover:shadow-xl"
+                    className="relative p-6 cursor-pointer border border-white/20 transition-all hover:-translate-y-1 hover:shadow-xl rounded-2xl overflow-hidden"
                     style={{
                       background: cardBackground,
                       boxShadow: `0 18px 36px -24px ${applyAlpha(courseColor.primary, 0.6)}`,
@@ -218,7 +221,7 @@ export default function FlashcardInterface({ onBack }: FlashcardInterfaceProps) 
                       }
                     }}
                   >
-                    <div className="flex items-start gap-4">
+                    <div className="flex items-start gap-4 relative z-10">
                       <div
                         className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
                         style={{
@@ -264,7 +267,7 @@ export default function FlashcardInterface({ onBack }: FlashcardInterfaceProps) 
                 );
               })}
             </div>
-          </div>
+          </HighlightedSection>
         ) : (
           /* Lesson Selection */
           <div className="space-y-6">
@@ -289,7 +292,7 @@ export default function FlashcardInterface({ onBack }: FlashcardInterfaceProps) 
               </Button>
             </div>
 
-            <Card className="p-4 bg-gradient-to-r from-primary/5 to-chart-2/5 border-primary/20">
+            <Card className="p-4 bg-gradient-to-r from-primary/5 to-chart-2/5 border-primary/20 shadow-[0_22px_52px_-30px_rgba(59,130,246,0.4)] ring-1 ring-primary/10">
               <div className="flex items-center gap-3">
                 <Sparkles className="h-5 w-5 text-primary" />
                 <p className="text-sm text-foreground">
@@ -318,7 +321,7 @@ export default function FlashcardInterface({ onBack }: FlashcardInterfaceProps) 
                   return (
                     <Card
                       key={lesson.id}
-                      className={`p-4 cursor-pointer transition-all ${
+                      className={`p-4 cursor-pointer transition-all rounded-2xl ${
                         isSelected || isAllSelected
                           ? 'border-primary bg-primary/5'
                           : 'hover:border-primary/50'
@@ -364,25 +367,26 @@ export default function FlashcardInterface({ onBack }: FlashcardInterfaceProps) 
           </div>
         )}
       </div>
-    );
-  }
+    </div>
+  );
+}
 
-  // Study Interface (existing flashcard view)
+// Study Interface (existing flashcard view)
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto">
+    <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* Header */}
-      <div className="mb-6">
-        <Button variant="ghost" onClick={handleBackToSelection} className="mb-4">
-          <ArrowLeft className="h-4 w-4 mr-2" />
+      <section className="space-y-4">
+        <Button variant="ghost" onClick={handleBackToSelection} className="self-start flex items-center gap-2 text-sm font-medium">
+          <ArrowLeft className="h-4 w-4" />
           Back to Selection
         </Button>
         
-        <div className="flex items-center gap-3 mb-2">
+        <div className="flex items-center gap-3">
           <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
             <Brain className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-foreground">Smart Study Tools</h1>
+            <h1 className="text-lg font-semibold text-foreground">Smart Study Tools</h1>
             <p className="text-sm text-muted-foreground">
               {selectedCourse 
                 ? mockFlashcardsByCourse[selectedCourse as keyof typeof mockFlashcardsByCourse]?.courseName
@@ -390,12 +394,13 @@ export default function FlashcardInterface({ onBack }: FlashcardInterfaceProps) 
             </p>
           </div>
         </div>
-      </div>
+      </section>
 
 
 
-      {/* Mode Tabs */}
-      <Tabs value={mode} onValueChange={(v) => setMode(v as 'flashcards' | 'quiz')} className="space-y-6">
+      {/* Mode Sections */}
+      <section className="space-y-6">
+        <Tabs value={mode} onValueChange={(v) => setMode(v as 'flashcards' | 'quiz')} className="space-y-6">
         <TabsList className="bg-muted w-full">
           <TabsTrigger value="flashcards" className="flex-1">Flashcards</TabsTrigger>
           <TabsTrigger value="quiz" className="flex-1">Practice Quiz</TabsTrigger>
@@ -645,7 +650,8 @@ export default function FlashcardInterface({ onBack }: FlashcardInterfaceProps) 
             </Card>
           )}
         </TabsContent>
-      </Tabs>
+        </Tabs>
+      </section>
     </div>
   );
 }

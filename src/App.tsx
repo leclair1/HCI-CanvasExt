@@ -188,16 +188,17 @@ export default function App() {
         '--accent-foreground': accentForeground,
       } as React.CSSProperties}
     >
-      <div className="min-h-screen relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(at_top_left,_rgba(59,130,246,0.12),transparent_55%),radial-gradient(at_bottom_right,_rgba(16,185,129,0.12),transparent_48%),radial-gradient(at_top_right,_rgba(139,92,246,0.08),transparent_60%)]" />
-        <div className="relative min-h-screen bg-background/95 backdrop-blur-sm">
+      <div className="min-h-screen relative overflow-hidden bg-slate-950">
+        <div className="pointer-events-none absolute inset-0 opacity-80 bg-[radial-gradient(at_top_left,_rgba(56,189,248,0.15),transparent_55%),radial-gradient(at_bottom_right,_rgba(59,130,246,0.18),transparent_45%),radial-gradient(at_top_right,_rgba(147,51,234,0.12),transparent_60%)]" />
+        <div className="pointer-events-none absolute inset-0 mix-blend-screen opacity-35 bg-[radial-gradient(circle_at_20%_20%,_rgba(248,250,252,0.35),transparent_45%),radial-gradient(circle_at_80%_80%,_rgba(192,132,252,0.28),transparent_60%)]" />
+        <div className="relative min-h-screen bg-background/92 backdrop-blur-xl shadow-[0_40px_120px_rgba(15,23,42,0.45)] ring-1 ring-white/10">
           <TopNavigation
             currentView={secondaryView ? 'home' : mainView}
             onViewChange={handleViewChange}
             onOpenSettings={handleOpenSettings}
           />
 
-          <main className="relative mt-2">
+          <main className="relative mt-4 w-full px-4 sm:px-6 lg:px-10 pb-12">
             {renderContent()}
           </main>
 
