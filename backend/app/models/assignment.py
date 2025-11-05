@@ -18,3 +18,5 @@ class Assignment(Base):
     points = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
+

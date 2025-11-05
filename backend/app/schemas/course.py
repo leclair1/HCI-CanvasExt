@@ -25,3 +25,5 @@ class Course(CourseBase):
     class Config:
         from_attributes = True
 
+
+

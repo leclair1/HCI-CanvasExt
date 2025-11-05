@@ -13,3 +13,5 @@ class UserSettings(Base):
     spacing = Column(String, default="comfortable")
     accent_color = Column(String, default="#030213")
 
+
+

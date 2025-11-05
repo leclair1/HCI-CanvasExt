@@ -12,3 +12,5 @@ class StudySession(Base):
     activity_type = Column(String, default="general")  # flashcards, reading, practice, etc.
     notes = Column(String, nullable=True)
 
+
+

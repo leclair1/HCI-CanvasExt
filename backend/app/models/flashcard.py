@@ -26,3 +26,5 @@ class Flashcard(Base):
     mastered = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
+

@@ -23,3 +23,5 @@ class ChatResponse(BaseModel):
     role: str = "assistant"
     references: list[str] = []  # References to course materials used
 
+
+

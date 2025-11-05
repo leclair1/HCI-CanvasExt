@@ -23,3 +23,5 @@ class StudyStats(BaseModel):
     by_course: dict[str, int]
     by_activity: dict[str, int]
 
+
+

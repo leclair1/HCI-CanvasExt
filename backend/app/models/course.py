@@ -12,3 +12,5 @@ class Course(Base):
     progress = Column(Float, default=0.0)
     color = Column(String, nullable=False, default="#3B82F6")
 
+
+

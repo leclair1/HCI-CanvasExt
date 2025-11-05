@@ -24,3 +24,5 @@ class UserSettings(UserSettingsBase):
     class Config:
         from_attributes = True
 
+
+
