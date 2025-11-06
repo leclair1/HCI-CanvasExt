@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { GraduationCap } from "lucide-react";
+import { authAPI, tokenManager } from "../lib/api";
 
 interface LoginProps {
   onLogin: () => void;
@@ -10,11 +11,28 @@ export default function Login({ onLogin, onSwitchToSignup }: LoginProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate login
-    onLogin();
+    setError("");
+    setLoading(true);
+
+    try {
+      const response = await authAPI.login({ email, password });
+      
+      // Store token and user data
+      tokenManager.setToken(response.access_token);
+      tokenManager.setUser(response.user);
+      
+      // Success! Navigate to dashboard
+      onLogin();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -31,6 +49,11 @@ export default function Login({ onLogin, onSwitchToSignup }: LoginProps) {
 
         {/* Login Form */}
         <div className="bg-card rounded-2xl p-8 border border-border">
+          {error && (
+            <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+              {error}
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email Field */}
             <div className="space-y-2">
@@ -89,9 +112,10 @@ export default function Login({ onLogin, onSwitchToSignup }: LoginProps) {
             {/* Sign In Button */}
             <button
               type="submit"
-              className="w-full h-11 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+              disabled={loading}
+              className="w-full h-11 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Sign In
+              {loading ? "Signing in..." : "Sign In"}
             </button>
           </form>
 

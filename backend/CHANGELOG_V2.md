@@ -199,7 +199,22 @@ backend/
 
 ## Migration Guide
 
-### For Development (Recommended)
+### For Development with Docker (Recommended)
+
+```bash
+# 1. Pull latest code
+git pull
+
+# 2. Stop old containers and remove volumes
+docker-compose down -v
+
+# 3. Start new containers (rebuilds with new dependencies)
+docker-compose up -d --build
+
+# Done! Fresh database with new schema created automatically
+```
+
+### For Development without Docker (Local)
 
 ```bash
 # 1. Pull latest code

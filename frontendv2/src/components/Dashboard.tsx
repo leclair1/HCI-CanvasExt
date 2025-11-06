@@ -1,4 +1,6 @@
 import { Clock, BookOpen, Award, ChevronRight, Sparkles, Calendar } from "lucide-react";
+import { useEffect, useState } from "react";
+import { tokenManager } from "../lib/api";
 
 interface DashboardProps {
   onNavigateToCourse: (courseCode: string, courseName: string) => void;
@@ -6,13 +8,24 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ onNavigateToCourse, onNavigateToPlanner }: DashboardProps) {
+  const [userName, setUserName] = useState("Student");
+  const [studyStreak, setStudyStreak] = useState(0);
+
+  useEffect(() => {
+    const user = tokenManager.getUser();
+    if (user) {
+      setUserName(user.first_name);
+      setStudyStreak(user.study_streak_days);
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Main Content */}
       <main className="pt-24 px-12 max-w-7xl mx-auto pb-12">
         {/* Welcome Section */}
         <div className="mb-6">
-          <h1 className="text-foreground mb-1">Welcome back, Student! 👋</h1>
+          <h1 className="text-foreground mb-1">Welcome back, {userName}! 👋</h1>
           <p className="text-muted-foreground">Here's your learning dashboard</p>
         </div>
 
@@ -179,7 +192,7 @@ export default function Dashboard({ onNavigateToCourse, onNavigateToPlanner }: D
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-muted-foreground text-sm mb-1">Study Streak</p>
-                  <p className="text-foreground">12 Days</p>
+                  <p className="text-foreground">{studyStreak} {studyStreak === 1 ? 'Day' : 'Days'}</p>
                 </div>
                 <div className="size-10 rounded-lg bg-warning/20 flex items-center justify-center">
                   <Award className="size-5 text-warning" />

@@ -1,24 +1,111 @@
-# Quick Setup Guide for Frontend V2 Backend
+# Quick Setup Guide for Frontend V2 Backend (Docker)
 
-This guide will help you set up the updated backend that works with Frontend V2.
+This guide will help you set up the updated backend using **Docker** (PostgreSQL + FastAPI) - no local Python installation needed!
 
 ## Prerequisites
 
-- Python 3.8+
-- pip (Python package manager)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
+- Git (optional)
 
-## Step 1: Install Dependencies
+That's it! Everything else runs in Docker containers.
+
+## Step 1: Start the Services
 
 ```bash
 cd HCI-CanvasExt/backend
-pip install -r requirements.txt
+
+# Start PostgreSQL + Backend
+docker-compose up -d
 ```
 
-The following new packages will be installed:
-- `python-jose[cryptography]` - JWT token handling
-- `passlib[bcrypt]` - Password hashing
+This command will:
+1. Download PostgreSQL 16 image (if not already downloaded)
+2. Build the FastAPI backend image
+3. Start both services
+4. Create the database automatically
 
-## Step 2: Configure Environment
+**First time?** Building the backend image may take 2-3 minutes.
+
+## Step 2: Verify Services are Running
+
+```bash
+# Check if containers are running
+docker-compose ps
+
+# You should see:
+# - canvas_ext_db (postgres)
+# - canvas_ext_backend (fastapi)
+```
+
+## Step 3: View Logs (Optional)
+
+```bash
+# View all logs
+docker-compose logs -f
+
+# View only backend logs
+docker-compose logs -f backend
+
+# View only database logs
+docker-compose logs -f postgres
+```
+
+Press `Ctrl+C` to stop viewing logs.
+
+## Step 4: Access the API
+
+The backend is now running!
+
+- **API Server:** http://localhost:8000
+- **API Documentation (Swagger):** http://localhost:8000/api/docs
+- **Alternative Docs (ReDoc):** http://localhost:8000/api/redoc
+
+## Step 5: Test the API
+
+### Option A: Using Swagger UI (Easiest)
+
+1. Go to http://localhost:8000/api/docs
+2. Find `/api/v1/auth/signup` endpoint
+3. Click "Try it out"
+4. Enter test data:
+   ```json
+   {
+     "first_name": "Test",
+     "last_name": "User",
+     "email": "test@university.edu",
+     "password": "test123456"
+   }
+   ```
+5. Click "Execute"
+6. You should receive a token!
+
+### Option B: Using cURL
+
+```bash
+# Sign up a new user
+curl -X POST http://localhost:8000/api/v1/auth/signup \
+  -H "Content-Type: application/json" \
+  -d '{
+    "first_name": "Test",
+    "last_name": "User",
+    "email": "test@university.edu",
+    "password": "test123456"
+  }'
+
+# You should receive a response with access_token and user data
+```
+
+## Configuration
+
+### Default Settings
+
+The docker-compose.yml is pre-configured with:
+- **Database:** PostgreSQL on port 5432
+- **Backend:** FastAPI on port 8000
+- **CORS:** Allows http://localhost:5173, 5174, 3000
+- **Auth Token:** 30-day expiration
+
+### Custom Configuration (Optional)
 
 Create a `.env` file in the backend directory:
 
@@ -27,158 +114,254 @@ Create a `.env` file in the backend directory:
 touch .env  # On Windows: type nul > .env
 ```
 
-Add the following content to `.env`:
+Add custom settings:
 
 ```env
-# Database Configuration
-DATABASE_URL=sqlite:///./canvas_ext.db
+# Generate a secure secret key for production
+SECRET_KEY=your-generated-secret-key-here
 
-# Security Settings
-SECRET_KEY=change-this-to-a-random-secret-key-in-production
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=43200
-
-# CORS Settings
-CORS_ORIGINS=["http://localhost:5173","http://localhost:3000","http://localhost:5174"]
-
-# AI API Keys (optional)
-OPENAI_API_KEY=
-ANTHROPIC_API_KEY=
+# Optional: AI API Keys
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-**⚠️ IMPORTANT:** For production, generate a secure `SECRET_KEY`:
+To generate a secure SECRET_KEY:
 ```bash
-# On Linux/Mac
-openssl rand -hex 32
+# Using openssl
+docker run --rm alpine/openssl rand -hex 32
 
 # Or use Python
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-## Step 3: Initialize Database
+Restart services after creating .env:
+```bash
+docker-compose down
+docker-compose up -d
+```
 
-### Option A: Fresh Database (Recommended)
+## Database Management
 
-If you have an old database, delete it and start fresh:
+### Access PostgreSQL Database
 
 ```bash
-# Delete old database
-rm canvas_ext.db  # On Windows: del canvas_ext.db
-
-# The database will be created automatically when you start the server
+# Connect to PostgreSQL
+docker exec -it canvas_ext_db psql -U canvas_user -d canvas_ext
 ```
 
-### Option B: Keep Existing Data
+Inside psql:
+```sql
+-- List all tables
+\dt
 
-If you have important data in your existing database, you'll need to manually update the schema. See `FRONTEND_V2_UPDATES.md` for all schema changes.
+-- View users
+SELECT id, first_name, last_name, email FROM users;
 
-## Step 4: Start the Server
+-- View courses
+SELECT * FROM courses;
+
+-- Exit
+\q
+```
+
+### Reset Database (Fresh Start)
 
 ```bash
-# Start the development server
-python -m uvicorn app.main:app --reload
+# Stop services
+docker-compose down
+
+# Remove database volume (deletes all data)
+docker volume rm backend_postgres_data
+
+# Start services (creates fresh database)
+docker-compose up -d
 ```
 
-Or:
+## Common Commands
 
+### Start Services
 ```bash
-uvicorn app.main:app --reload
+docker-compose up -d
 ```
 
-The server will start on `http://localhost:8000`
-
-## Step 5: Verify Installation
-
-1. **Check API Documentation:**
-   - Open http://localhost:8000/api/docs
-   - You should see all the new endpoints for auth, quizzes, saved-decks, etc.
-
-2. **Test Authentication:**
-   ```bash
-   # Sign up a new user
-   curl -X POST http://localhost:8000/api/v1/auth/signup \
-     -H "Content-Type: application/json" \
-     -d '{
-       "first_name": "Test",
-       "last_name": "User",
-       "email": "test@university.edu",
-       "password": "test123456"
-     }'
-   ```
-
-   You should receive a token in the response.
-
-3. **Test Protected Endpoint:**
-   ```bash
-   # Get dashboard (requires token from above)
-   curl http://localhost:8000/api/v1/dashboard/ \
-     -H "Authorization: Bearer YOUR_TOKEN_HERE"
-   ```
-
-## Step 6: Connect Frontend V2
-
-Update your frontend's API base URL to point to:
-```
-http://localhost:8000/api/v1
-```
-
-## Common Issues & Solutions
-
-### Issue: "Module not found" errors
-
-**Solution:**
+### Stop Services
 ```bash
-pip install -r requirements.txt --force-reinstall
+docker-compose down
 ```
 
-### Issue: Database errors about missing columns
-
-**Solution:**
+### Restart Services
 ```bash
-# Delete the database and start fresh
-rm canvas_ext.db
-# Restart the server - it will create the new schema
-python -m uvicorn app.main:app --reload
+docker-compose restart
 ```
 
-### Issue: "401 Unauthorized" on all requests
-
-**Solution:**
-- Make sure you're including the `Authorization: Bearer <token>` header
-- Check that your token is valid (not expired)
-- Try logging in again to get a new token
-
-### Issue: Port 8000 already in use
-
-**Solution:**
+### Rebuild Backend (after code changes)
 ```bash
-# Use a different port
-uvicorn app.main:app --reload --port 8001
+docker-compose build backend
+docker-compose up -d backend
+```
 
-# Or find what's using port 8000
-# Linux/Mac:
-lsof -i :8000
-# Windows:
+### View Logs
+```bash
+# All logs
+docker-compose logs -f
+
+# Backend only
+docker-compose logs -f backend
+
+# Last 100 lines
+docker-compose logs --tail=100
+```
+
+### Check Service Health
+```bash
+# Container status
+docker-compose ps
+
+# Resource usage
+docker stats
+```
+
+## Connect Frontend V2
+
+Update your frontend's API base URL to:
+```javascript
+const API_BASE_URL = "http://localhost:8000/api/v1";
+```
+
+## Troubleshooting
+
+### Issue: "Port 8000 already in use"
+
+**Check what's using the port:**
+```bash
+# On Windows
 netstat -ano | findstr :8000
+
+# On Linux/Mac
+lsof -i :8000
 ```
+
+**Change the backend port in docker-compose.yml:**
+```yaml
+backend:
+  ports:
+    - "8001:8000"  # Use port 8001 instead
+```
+
+Then restart: `docker-compose up -d`
+
+### Issue: "Cannot connect to database"
+
+**Check PostgreSQL is running:**
+```bash
+docker-compose ps postgres
+```
+
+**View database logs:**
+```bash
+docker-compose logs postgres
+```
+
+**Restart database:**
+```bash
+docker-compose restart postgres
+```
+
+### Issue: Backend container keeps restarting
+
+**View backend logs:**
+```bash
+docker-compose logs backend
+```
+
+**Common causes:**
+- Database not ready (wait 10-15 seconds)
+- Code errors (check logs for Python errors)
+- Missing dependencies (rebuild: `docker-compose build backend`)
 
 ### Issue: CORS errors in browser
 
-**Solution:**
-Add your frontend URL to `CORS_ORIGINS` in `.env`:
-```env
-CORS_ORIGINS=["http://localhost:5173","http://localhost:3000","YOUR_FRONTEND_URL"]
+**Solution:** Add your frontend URL to docker-compose.yml:
+```yaml
+environment:
+  CORS_ORIGINS: '["http://localhost:5173", "http://localhost:YOUR_PORT"]'
 ```
 
-## Quick Test Commands
+Restart: `docker-compose restart backend`
 
-### Test Complete Flow
+### Issue: Changes to code not reflecting
+
+**Solution:** The code is volume-mounted for hot reload. If it's not working:
+```bash
+# Rebuild and restart
+docker-compose build backend
+docker-compose up -d backend
+```
+
+### Issue: Docker Desktop not running
+
+**Solution:**
+1. Start Docker Desktop application
+2. Wait for it to fully start (green icon)
+3. Run `docker-compose up -d` again
+
+## Advanced: Development Tips
+
+### Run Commands Inside Container
+
+```bash
+# Open bash in backend container
+docker exec -it canvas_ext_backend bash
+
+# Inside container, you can:
+# - Run Python scripts
+# - Check installed packages
+# - Debug issues
+```
+
+### Database Backup
+
+```bash
+# Backup database
+docker exec -t canvas_ext_db pg_dump -U canvas_user canvas_ext > backup.sql
+
+# Restore database
+docker exec -i canvas_ext_db psql -U canvas_user canvas_ext < backup.sql
+```
+
+### View Container Resource Usage
+
+```bash
+docker stats canvas_ext_backend canvas_ext_db
+```
+
+## What's Running?
+
+### PostgreSQL Container
+- **Name:** canvas_ext_db
+- **Port:** 5432
+- **User:** canvas_user
+- **Password:** canvas_password
+- **Database:** canvas_ext
+- **Data:** Persisted in Docker volume `postgres_data`
+
+### Backend Container
+- **Name:** canvas_ext_backend
+- **Port:** 8000
+- **Base Image:** Python 3.11
+- **Framework:** FastAPI
+- **Auto-reload:** Enabled (code changes apply automatically)
+
+## Testing the Complete Flow
+
 ```bash
 # 1. Sign up
 TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/signup \
   -H "Content-Type: application/json" \
-  -d '{"first_name":"Test","last_name":"User","email":"test@example.com","password":"test123456"}' \
-  | python -c "import sys, json; print(json.load(sys.stdin)['access_token'])")
+  -d '{"first_name":"John","last_name":"Doe","email":"john@test.edu","password":"test123456"}' \
+  | python -c "import sys, json; print(json.load(sys.stdin)['access_token'])" 2>/dev/null)
+
+echo "Token: $TOKEN"
 
 # 2. Get dashboard
 curl http://localhost:8000/api/v1/dashboard/ \
@@ -188,7 +371,7 @@ curl http://localhost:8000/api/v1/dashboard/ \
 curl -X POST http://localhost:8000/api/v1/saved-decks/ \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name":"Test Deck","cards":[{"question":"Q1","answer":"A1","order":0}]}'
+  -d '{"name":"Test Deck","cards":[{"question":"What is Docker?","answer":"A containerization platform","order":0}]}'
 
 # 4. List saved decks
 curl http://localhost:8000/api/v1/saved-decks/ \
@@ -203,59 +386,75 @@ curl http://localhost:8000/api/v1/saved-decks/ \
 - Token-based API access
 
 ✅ **User Profiles**
-- First name, last name fields
+- Profile management
 - Notification preferences
-- Appearance settings (dark mode)
+- Dark mode settings
 - Study streak tracking
 
 ✅ **Quiz System**
-- Create custom quizzes
-- AI-generated quizzes (mock for now)
-- Submit and grade answers
-- View quiz history
+- Create and take quizzes
+- Instant grading
+- Quiz history
+- AI generation ready
 
 ✅ **Saved Flashcard Decks**
-- Save flashcard collections
+- Save custom decks
 - Organize by course
-- Track study progress
+- Full CRUD operations
 
 ✅ **Dashboard**
 - Due today items
 - Study suggestions
 - Course progress
-- Upcoming assignments
-- Today's tasks
-
-## Next Steps
-
-1. ✅ Backend is running
-2. Connect Frontend V2 to the API
-3. Test authentication flow
-4. Test all new features
-5. (Optional) Set up PostgreSQL for production
-6. (Optional) Add AI API keys for real AI features
-
-## Need Help?
-
-- **API Documentation:** http://localhost:8000/api/docs
-- **Detailed Changes:** See `FRONTEND_V2_UPDATES.md`
-- **API Examples:** See `API_REFERENCE_V2.md`
-- **General Setup:** See `README.md`
+- Task tracking
 
 ## Production Deployment
 
-Before deploying to production:
+For production, update docker-compose.yml:
 
-1. ✅ Change `SECRET_KEY` to a secure random value
-2. ✅ Use PostgreSQL instead of SQLite
-3. ✅ Enable HTTPS
-4. ✅ Set proper CORS origins
-5. ✅ Use environment variables for all secrets
-6. ✅ Set up proper logging and monitoring
-7. ✅ Implement rate limiting
-8. ✅ Regular database backups
+```yaml
+environment:
+  # Use a secure random key
+  SECRET_KEY: <generated-with-openssl-rand-hex-32>
+  
+  # Use production database
+  DATABASE_URL: postgresql://user:pass@production-db:5432/dbname
+  
+  # Set proper CORS
+  CORS_ORIGINS: '["https://yourdomain.com"]'
+```
+
+## Need Help?
+
+- **API Docs:** http://localhost:8000/api/docs
+- **Detailed Changes:** See `FRONTEND_V2_UPDATES.md`
+- **API Examples:** See `API_REFERENCE_V2.md`
+- **General Info:** See `README.md`
+
+## Cleanup (Remove Everything)
+
+To completely remove all containers, volumes, and images:
+
+```bash
+# Stop and remove containers
+docker-compose down
+
+# Remove volumes (deletes database data)
+docker-compose down -v
+
+# Remove backend image
+docker rmi backend-canvas_ext_backend
+```
 
 ---
 
-🎉 **You're all set!** Your backend is now ready for Frontend V2.
+🎉 **You're all set!** Your backend is running in Docker with PostgreSQL.
 
+**Quick Start:**
+```bash
+docker-compose up -d              # Start everything
+docker-compose logs -f            # View logs
+docker-compose down              # Stop everything
+```
+
+Access API: http://localhost:8000/api/docs

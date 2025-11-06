@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { GraduationCap, ExternalLink } from "lucide-react";
+import { authAPI, tokenManager } from "../lib/api";
 
 interface SignupProps {
   onSignup: () => void;
@@ -14,19 +15,49 @@ export default function Signup({ onSignup, onSwitchToLogin }: SignupProps) {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+
     if (password !== confirmPassword) {
-      alert("Passwords don't match!");
+      setError("Passwords don't match!");
       return;
     }
     if (!agreeToTerms) {
-      alert("Please agree to the Terms of Service and Privacy Policy");
+      setError("Please agree to the Terms of Service and Privacy Policy");
       return;
     }
-    // Simulate signup
-    onSignup();
+
+    setLoading(true);
+
+    try {
+      const signupData = {
+        first_name: firstName,
+        last_name: lastName,
+        email,
+        password,
+        ...(canvasApiKey && {
+          canvas_api_key: canvasApiKey,
+          canvas_instance_url: "https://canvas.instructure.com",
+        }),
+      };
+
+      const response = await authAPI.signup(signupData);
+      
+      // Store token and user data
+      tokenManager.setToken(response.access_token);
+      tokenManager.setUser(response.user);
+      
+      // Success! Navigate to dashboard
+      onSignup();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Signup failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -43,6 +74,11 @@ export default function Signup({ onSignup, onSwitchToLogin }: SignupProps) {
 
         {/* Signup Form */}
         <div className="bg-card rounded-2xl p-8 border border-border">
+          {error && (
+            <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+              {error}
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Name Fields */}
             <div className="grid grid-cols-2 gap-4">
@@ -95,27 +131,22 @@ export default function Signup({ onSignup, onSwitchToLogin }: SignupProps) {
               </p>
             </div>
 
-            {/* Canvas API Key */}
+            {/* Canvas API Key (Optional) */}
             <div className="space-y-2">
               <label htmlFor="canvasApiKey" className="text-sm text-foreground">
-                Canvas API Key
+                Canvas API Key <span className="text-muted-foreground">(Optional)</span>
               </label>
               <input
                 id="canvasApiKey"
                 type="text"
                 value={canvasApiKey}
                 onChange={(e) => setCanvasApiKey(e.target.value)}
-                placeholder="Enter your Canvas API key"
+                placeholder="Enter your Canvas API key (optional)"
                 className="w-full h-9 px-3 rounded-lg bg-muted text-foreground placeholder:text-muted-foreground text-sm outline-none border border-border focus:border-primary transition-colors"
-                required
               />
-              <a
-                href="#"
-                className="text-xs text-foreground hover:text-primary transition-colors inline-flex items-center gap-1"
-              >
-                How to get your Canvas API key
-                <ExternalLink className="size-3" />
-              </a>
+              <p className="text-xs text-muted-foreground">
+                You can add this later to sync your Canvas courses
+              </p>
             </div>
 
             {/* Password Fields */}
@@ -165,9 +196,10 @@ export default function Signup({ onSignup, onSwitchToLogin }: SignupProps) {
             {/* Create Account Button */}
             <button
               type="submit"
-              className="w-full h-11 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+              disabled={loading}
+              className="w-full h-11 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Create Account
+              {loading ? "Creating account..." : "Create Account"}
             </button>
           </form>
 

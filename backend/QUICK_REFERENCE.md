@@ -1,13 +1,18 @@
-# Quick Reference - Backend V2
+# Quick Reference - Backend V2 (Docker)
 
-## 🚀 Quick Start
+## 🚀 Quick Start (Docker - No Python Install Needed!)
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+cd HCI-CanvasExt/backend
 
-# Start server
-uvicorn app.main:app --reload
+# Start everything (PostgreSQL + Backend)
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop everything
+docker-compose down
 
 # API Docs
 http://localhost:8000/api/docs
@@ -124,22 +129,39 @@ async def protected(current_user: User = Depends(get_current_user)):
 - Token may be expired (30 days)
 - Login again to get new token
 
-### "Module not found"
+### Services won't start
 ```bash
-pip install -r requirements.txt --force-reinstall
+# Check Docker Desktop is running
+docker --version
+
+# View logs
+docker-compose logs -f
+
+# Restart
+docker-compose restart
 ```
 
 ### Database errors
 ```bash
-# Delete and recreate
-rm canvas_ext.db
-uvicorn app.main:app --reload
+# Fresh start (removes all data)
+docker-compose down -v
+docker-compose up -d
 ```
 
 ### CORS errors
-Add frontend URL to `.env`:
-```env
-CORS_ORIGINS=["http://localhost:5173"]
+Update `docker-compose.yml`:
+```yaml
+environment:
+  CORS_ORIGINS: '["http://localhost:5173"]'
+```
+Then: `docker-compose restart backend`
+
+### Port 8000 in use
+Change in `docker-compose.yml`:
+```yaml
+backend:
+  ports:
+    - "8001:8000"  # Use 8001 instead
 ```
 
 ## 🧪 Testing
@@ -190,17 +212,25 @@ backend/
 
 ## 🔧 Configuration
 
-### `.env` File
+### Default (No Config Needed)
+Everything is pre-configured in `docker-compose.yml`:
+- PostgreSQL database
+- CORS for common ports
+- Auto-reload enabled
+
+### Custom Configuration (Optional)
+Create `.env` file:
 ```env
-DATABASE_URL=sqlite:///./canvas_ext.db
 SECRET_KEY=your-secret-key-here
-CORS_ORIGINS=["http://localhost:5173"]
+OPENAI_API_KEY=sk-...
 ```
 
 ### Generate SECRET_KEY
 ```bash
-openssl rand -hex 32
-# or
+# Using Docker
+docker run --rm alpine/openssl rand -hex 32
+
+# Or Python (if installed)
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
