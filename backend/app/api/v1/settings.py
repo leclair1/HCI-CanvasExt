@@ -37,3 +37,4 @@ def update_settings(settings: UserSettingsUpdate, db: Session = Depends(get_db))
 
 
 
+

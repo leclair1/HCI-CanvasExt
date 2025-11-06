@@ -193,3 +193,4 @@ const courses = await response.json();
 
 Need help? Check the logs: `docker-compose logs -f`
 
+

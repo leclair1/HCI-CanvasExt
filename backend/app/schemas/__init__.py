@@ -4,6 +4,9 @@ from app.schemas.flashcard import Flashcard, FlashcardCreate, FlashcardSet, Flas
 from app.schemas.study_session import StudySession, StudySessionCreate
 from app.schemas.chat import ChatMessage, ChatRequest, ChatResponse
 from app.schemas.settings import UserSettings, UserSettingsUpdate
+from app.schemas.auth import UserSignup, UserLogin, UserResponse, Token, TokenData
+from app.schemas.quiz import QuizCreate, Quiz, QuizPublic, QuizSubmit, QuizResult, GenerateQuizRequest
+from app.schemas.saved_deck import SavedDeckCreate, SavedDeck, SavedDeckList, Flashcard as SavedFlashcardSchema
 
 __all__ = [
     "Course",
@@ -23,6 +26,21 @@ __all__ = [
     "ChatResponse",
     "UserSettings",
     "UserSettingsUpdate",
+    "UserSignup",
+    "UserLogin",
+    "UserResponse",
+    "Token",
+    "TokenData",
+    "QuizCreate",
+    "Quiz",
+    "QuizPublic",
+    "QuizSubmit",
+    "QuizResult",
+    "GenerateQuizRequest",
+    "SavedDeckCreate",
+    "SavedDeck",
+    "SavedDeckList",
+    "SavedFlashcardSchema",
 ]
 
 

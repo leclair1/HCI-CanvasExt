@@ -8,11 +8,11 @@ python-multipart==0.0.12
 python-dotenv==1.0.1
 httpx==0.27.2
 
+# Authentication packages
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
 # AI packages (optional - uncomment when needed)
 # openai==1.54.0
 # anthropic==0.39.0
-
-# Authentication packages (optional - add when implementing auth)
-# PyJWT==2.10.1
-# passlib[bcrypt]==1.7.4
 

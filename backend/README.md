@@ -2,6 +2,18 @@
 
 FastAPI backend for the Canvas LMS Browser Extension. Provides REST APIs for courses, assignments, flashcards, AI tutoring, and study tracking.
 
+## ⚡ NEW: Frontend V2 Updates
+
+The backend has been updated to fully support Frontend V2 with:
+- **Authentication** (JWT-based login/signup)
+- **User Profiles** with settings and preferences
+- **Quizzes** with AI generation support
+- **Saved Flashcard Decks**
+- **Dashboard** with study insights and task tracking
+
+📖 **See [FRONTEND_V2_UPDATES.md](./FRONTEND_V2_UPDATES.md) for detailed changes**
+📖 **See [API_REFERENCE_V2.md](./API_REFERENCE_V2.md) for complete API documentation**
+
 ## 🚀 Quick Start with Docker (Recommended)
 
 ### Prerequisites
@@ -136,6 +148,38 @@ curl http://localhost:8000/api/v1/assignments
 
 ## 📚 API Endpoints
 
+For complete API documentation with examples, see [API_REFERENCE_V2.md](./API_REFERENCE_V2.md)
+
+### Authentication (NEW)
+- `POST /api/v1/auth/signup` - Register new user
+- `POST /api/v1/auth/login` - Login user
+- `POST /api/v1/auth/logout` - Logout user
+- `GET /api/v1/auth/me` - Get current user info
+
+### Profile & Settings (NEW)
+- `GET /api/v1/profile/` - Get user profile
+- `PUT /api/v1/profile/` - Update user profile
+- `PUT /api/v1/profile/notifications` - Update notification settings
+- `PUT /api/v1/profile/appearance` - Update appearance settings
+- `POST /api/v1/profile/change-password` - Change password
+
+### Dashboard (NEW)
+- `GET /api/v1/dashboard/` - Get complete dashboard data
+
+### Quizzes (NEW)
+- `POST /api/v1/quizzes/` - Create quiz
+- `GET /api/v1/quizzes/` - List all quizzes
+- `GET /api/v1/quizzes/{quiz_id}` - Get quiz for taking
+- `POST /api/v1/quizzes/submit` - Submit quiz answers
+- `POST /api/v1/quizzes/generate` - Generate quiz with AI
+- `DELETE /api/v1/quizzes/{quiz_id}` - Delete quiz
+
+### Saved Decks (NEW)
+- `POST /api/v1/saved-decks/` - Create saved flashcard deck
+- `GET /api/v1/saved-decks/` - List all saved decks
+- `GET /api/v1/saved-decks/{deck_id}` - Get saved deck
+- `DELETE /api/v1/saved-decks/{deck_id}` - Delete saved deck
+
 ### Canvas Integration
 - `POST /api/v1/canvas/auth` - Authenticate with Canvas LMS
 - `POST /api/v1/canvas/sync` - Sync all data from Canvas
@@ -239,13 +283,15 @@ docker exec -i canvas_ext_db psql -U canvas_user canvas_ext < backup.sql
 
 ## 🔒 Security
 
+✅ **Authentication is now implemented!** The API uses JWT tokens for secure authentication.
+
 For production:
-1. Change `SECRET_KEY` in `.env` to a strong random string
-2. Update database credentials
-3. Configure proper CORS origins
-4. Use HTTPS
-5. Implement authentication/authorization
-6. Secure API keys
+1. ✅ JWT authentication implemented
+2. Change `SECRET_KEY` in `.env` to a strong random string (use `openssl rand -hex 32`)
+3. Update database credentials
+4. Configure proper CORS origins
+5. Use HTTPS
+6. Secure API keys (Canvas API tokens are stored per-user)
 
 ## 🧪 Testing
 
@@ -316,15 +362,31 @@ docker-compose logs postgres
 pip install -r requirements.txt --force-reinstall
 ```
 
+**Database schema errors after update**
+```bash
+# If you get errors about missing columns after updating to Frontend V2 support:
+
+# Option 1: Fresh start (development only)
+rm canvas_ext.db  # or drop PostgreSQL database
+python seed_data.py  # Re-create with new schema
+
+# Option 2: Manual migration (production)
+# Use Alembic or manually add the new columns
+# See FRONTEND_V2_UPDATES.md for schema changes
+```
+
 ## 📝 Next Steps
 
-1. **Connect Frontend**: Update frontend to use API instead of mock data
-2. **Add Authentication**: Implement JWT or OAuth
-3. **Real AI Integration**: Connect OpenAI/Anthropic APIs
-4. **File Uploads**: Support uploading course materials (PDFs, videos)
-5. **Real-time Features**: Add WebSocket support for live chat
-6. **Caching**: Implement Redis for better performance
-7. **Monitoring**: Add logging and monitoring tools
+1. ✅ **Authentication**: JWT-based auth implemented
+2. ✅ **User Profiles**: Profile management with settings
+3. ✅ **Quizzes**: Quiz creation and grading system
+4. ✅ **Dashboard**: Student dashboard with insights
+5. **Real AI Integration**: Connect OpenAI/Anthropic APIs for real quiz generation
+6. **File Uploads**: Support uploading course materials (PDFs, videos)
+7. **Real-time Features**: Add WebSocket support for live chat
+8. **Caching**: Implement Redis for better performance
+9. **Monitoring**: Add logging and monitoring tools
+10. **Email Service**: Password reset and notification emails
 
 ## 📖 Additional Resources
 
