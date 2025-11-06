@@ -11,9 +11,12 @@ import Planner from "./components/Planner";
 import Insights from "./components/Insights";
 import AITutor from "./components/AITutor";
 import SavedFlashcards from "./components/SavedFlashcards";
+import Login from "./components/Login";
+import Signup from "./components/Signup";
+import ProfileSettings from "./components/ProfileSettings";
 import "./styles/globals.css";
 
-type View = "dashboard" | "course-details" | "course-selection" | "flashcard-selection" | "flashcard-study" | "quiz" | "quiz-results" | "planner" | "insights" | "ai-tutor" | "saved-flashcards";
+type View = "login" | "signup" | "dashboard" | "course-details" | "course-selection" | "flashcard-selection" | "flashcard-study" | "quiz" | "quiz-results" | "planner" | "insights" | "ai-tutor" | "saved-flashcards" | "profile";
 
 interface QuizAnswer {
   question: string;
@@ -36,7 +39,7 @@ interface FlashcardDeck {
 }
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<View>("dashboard");
+  const [currentView, setCurrentView] = useState<View>("login");
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [quizScore, setQuizScore] = useState(0);
   const [quizTotal, setQuizTotal] = useState(0);
@@ -66,7 +69,7 @@ export default function App() {
     setCurrentView("quiz");
   };
 
-  const handleNavigate = (view: "dashboard" | "flashcard-selection" | "planner" | "insights" | "ai-tutor") => {
+  const handleNavigate = (view: "dashboard" | "flashcard-selection" | "planner" | "insights" | "ai-tutor" | "profile") => {
     // When navigating to flashcards from navbar, show course selection first
     if (view === "flashcard-selection") {
       setCurrentView("course-selection");
@@ -129,6 +132,38 @@ export default function App() {
     console.log("Generating new quiz...");
   };
 
+  const handleLogin = () => {
+    setCurrentView("dashboard");
+  };
+
+  const handleSignup = () => {
+    setCurrentView("dashboard");
+  };
+
+  const handleLogout = () => {
+    setCurrentView("login");
+  };
+
+  // Show login/signup without navbar
+  if (currentView === "login" || currentView === "signup") {
+    return (
+      <div className="min-h-screen">
+        {currentView === "login" && (
+          <Login
+            onLogin={handleLogin}
+            onSwitchToSignup={() => setCurrentView("signup")}
+          />
+        )}
+        {currentView === "signup" && (
+          <Signup
+            onSignup={handleSignup}
+            onSwitchToLogin={() => setCurrentView("login")}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen">
       {/* Persistent Navbar */}
@@ -137,6 +172,7 @@ export default function App() {
         onNavigate={handleNavigate}
         isDarkMode={isDarkMode}
         onToggleDarkMode={toggleDarkMode}
+        onLogout={handleLogout}
       />
 
       {/* Main Content */}
@@ -222,6 +258,14 @@ export default function App() {
       )}
       {currentView === "ai-tutor" && (
         <AITutor onBack={() => setCurrentView("dashboard")} />
+      )}
+      {currentView === "profile" && (
+        <ProfileSettings
+          onBack={() => setCurrentView("dashboard")}
+          onLogout={handleLogout}
+          isDarkMode={isDarkMode}
+          onToggleDarkMode={toggleDarkMode}
+        />
       )}
     </div>
   );
