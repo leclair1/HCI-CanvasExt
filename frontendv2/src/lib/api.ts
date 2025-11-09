@@ -247,7 +247,7 @@ export const modulesAPI = {
 
 // Flashcards API
 export const flashcardsAPI = {
-  async generateFromModule(moduleId: number, numCards: number): Promise<{ flashcards: any[], module_name: string, count: number }> {
+  async generateFromModule(moduleId: number, numCards: number, fileUrls?: string[]): Promise<{ flashcards: any[], module_name: string, count: number }> {
     const token = tokenManager.getToken();
     if (!token) {
       throw new Error("Not authenticated");
@@ -261,7 +261,8 @@ export const flashcardsAPI = {
       },
       body: JSON.stringify({
         module_id: moduleId,
-        num_cards: numCards
+        num_cards: numCards,
+        ...(fileUrls && fileUrls.length > 0 && { file_urls: fileUrls })
       })
     });
 

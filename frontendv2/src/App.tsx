@@ -48,6 +48,9 @@ export default function App() {
   const [currentDeck, setCurrentDeck] = useState<Flashcard[]>([]);
   const [selectedCourse, setSelectedCourse] = useState({ id: 0, code: "CS 101", name: "Introduction to Computer Science" });
   const [generatedFlashcards, setGeneratedFlashcards] = useState<any[]>([]);
+  const [currentModuleId, setCurrentModuleId] = useState<number | null>(null);
+  const [currentFlashcardCount, setCurrentFlashcardCount] = useState<number>(15);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   const toggleDarkMode = () => {
     const newMode = !isDarkMode;
@@ -106,21 +109,33 @@ export default function App() {
     }
   };
 
-  const handleGenerateNewDeck = () => {
-    // Simulate generating a new deck with different flashcards
-    const newCards: Flashcard[] = [
-      {
-        id: Date.now(),
-        question: "What is Big O notation?",
-        answer: "Big O notation is a mathematical notation that describes the limiting behavior of a function when the argument tends towards a particular value or infinity."
-      },
-      {
-        id: Date.now() + 1,
-        question: "What is recursion?",
-        answer: "Recursion is a programming technique where a function calls itself to solve smaller instances of the same problem."
-      }
-    ];
-    setCurrentDeck(newCards);
+  const handleGenerateNewDeck = async () => {
+    if (currentModuleId === null) {
+      console.error("No module ID stored, cannot regenerate");
+      return;
+    }
+
+    setIsRegenerating(true);
+    try {
+      console.log(`Regenerating flashcards for module ${currentModuleId} with count ${currentFlashcardCount}`);
+      
+      // Import the API
+      const { flashcardsAPI } = await import("./lib/api");
+      
+      // Call the API to regenerate flashcards
+      const result = await flashcardsAPI.generateFromModule(currentModuleId, currentFlashcardCount);
+      
+      console.log("New flashcards generated successfully:", result.flashcards.length);
+      
+      // Update the generated flashcards
+      setGeneratedFlashcards(result.flashcards);
+      
+    } catch (error: any) {
+      console.error("Failed to regenerate flashcards:", error);
+      alert("Failed to generate new flashcards. Please try again.");
+    } finally {
+      setIsRegenerating(false);
+    }
   };
 
   const handleSaveQuiz = () => {
@@ -210,10 +225,16 @@ export default function App() {
       {currentView === "flashcard-selection" && (
         <FlashcardSelection
           onBack={() => setCurrentView("course-selection")}
-          onStartStudying={(flashcards) => {
+          onStartStudying={(flashcards, moduleId, count) => {
             if (flashcards) {
               console.log("Received generated flashcards:", flashcards);
               setGeneratedFlashcards(flashcards);
+            }
+            if (moduleId !== undefined) {
+              setCurrentModuleId(moduleId);
+            }
+            if (count !== undefined) {
+              setCurrentFlashcardCount(count);
             }
             setCurrentView("flashcard-study");
           }}
@@ -234,6 +255,7 @@ export default function App() {
           onGenerateNewDeck={handleGenerateNewDeck}
           onNavigateToAITutor={() => setCurrentView("ai-tutor")}
           flashcards={generatedFlashcards}
+          isRegenerating={isRegenerating}
         />
       )}
       {currentView === "saved-flashcards" && (

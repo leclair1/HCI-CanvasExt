@@ -9,6 +9,7 @@ interface FlashcardStudyProps {
   onGenerateNewDeck: () => void;
   onNavigateToAITutor: () => void;
   flashcards?: any[];
+  isRegenerating?: boolean;
 }
 
 interface Flashcard {
@@ -36,7 +37,8 @@ export default function FlashcardStudy({
   onSaveDeck, 
   onGenerateNewDeck, 
   onNavigateToAITutor,
-  flashcards: providedFlashcards
+  flashcards: providedFlashcards,
+  isRegenerating = false
 }: FlashcardStudyProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -113,10 +115,22 @@ export default function FlashcardStudy({
               </button>
               <button
                 onClick={onGenerateNewDeck}
-                className="h-9 px-4 rounded-lg bg-gradient-to-r from-accent/10 to-primary/10 hover:from-accent/20 hover:to-primary/20 border border-accent/30 text-foreground transition-all text-sm flex items-center gap-2"
+                disabled={isRegenerating}
+                className={`h-9 px-4 rounded-lg bg-gradient-to-r from-accent/10 to-primary/10 hover:from-accent/20 hover:to-primary/20 border border-accent/30 text-foreground transition-all text-sm flex items-center gap-2 ${
+                  isRegenerating ? "opacity-50 cursor-not-allowed" : ""
+                }`}
               >
-                <Sparkles className="size-4" />
-                Generate New
+                {isRegenerating ? (
+                  <>
+                    <RotateCw className="size-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="size-4" />
+                    Generate New
+                  </>
+                )}
               </button>
               
               {/* AI Tutor Badge */}

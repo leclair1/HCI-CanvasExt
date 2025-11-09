@@ -11,7 +11,7 @@ export default function Signup({ onSignup, onSwitchToLogin }: SignupProps) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-  const [canvasApiKey, setCanvasApiKey] = useState("");
+  const [canvasSession, setCanvasSession] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [agreeToTerms, setAgreeToTerms] = useState(false);
@@ -39,9 +39,9 @@ export default function Signup({ onSignup, onSwitchToLogin }: SignupProps) {
         last_name: lastName,
         email,
         password,
-        ...(canvasApiKey && {
-          canvas_api_key: canvasApiKey,
-          canvas_instance_url: "https://canvas.instructure.com",
+        ...(canvasSession && {
+          canvas_session_cookie: canvasSession,
+          canvas_instance_url: "https://usflearn.instructure.com",
         }),
       };
 
@@ -131,22 +131,23 @@ export default function Signup({ onSignup, onSwitchToLogin }: SignupProps) {
               </p>
             </div>
 
-            {/* Canvas API Key (Optional) */}
+            {/* Canvas Session Cookie (Optional) */}
             <div className="space-y-2">
-              <label htmlFor="canvasApiKey" className="text-sm text-foreground">
-                Canvas API Key <span className="text-muted-foreground">(Optional)</span>
+              <label htmlFor="canvasSession" className="text-sm text-foreground">
+                Canvas Session Cookie <span className="text-muted-foreground">(Optional)</span>
               </label>
               <input
-                id="canvasApiKey"
+                id="canvasSession"
                 type="text"
-                value={canvasApiKey}
-                onChange={(e) => setCanvasApiKey(e.target.value)}
-                placeholder="Enter your Canvas API key (optional)"
+                value={canvasSession}
+                onChange={(e) => setCanvasSession(e.target.value)}
+                placeholder="Paste your Canvas session cookie from browser DevTools"
                 className="w-full h-9 px-3 rounded-lg bg-muted text-foreground placeholder:text-muted-foreground text-sm outline-none border border-border focus:border-primary transition-colors"
               />
-              <p className="text-xs text-muted-foreground">
-                You can add this later to sync your Canvas courses
-              </p>
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>Get it from: Browser DevTools (F12) → Application → Cookies → canvas_session</p>
+                <p>Required for AI flashcard generation from Canvas course materials</p>
+              </div>
             </div>
 
             {/* Password Fields */}

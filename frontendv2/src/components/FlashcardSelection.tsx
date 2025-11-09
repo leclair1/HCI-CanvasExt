@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { ChevronLeft, BookOpen, Sparkles, Bookmark, Loader2 } from "lucide-react";
+import { ChevronLeft, BookOpen, Sparkles, Bookmark, Loader2, ChevronDown } from "lucide-react";
 import imgAiTutorLogo from "figma:asset/831d76f506f1dc02aaa78fa1316452543accee12.png";
 import { modulesAPI, Module, flashcardsAPI } from "../lib/api";
 
 interface FlashcardSelectionProps {
   onBack: () => void;
-  onStartStudying: (flashcards?: any[]) => void;
+  onStartStudying: (flashcards?: any[], moduleId?: number, count?: number) => void;
   onStartQuiz: () => void;
   onViewSavedDecks: () => void;
   onNavigateToAITutor: () => void;
@@ -29,6 +29,7 @@ export default function FlashcardSelection({
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedModuleId, setSelectedModuleId] = useState<number | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]); // URLs of selected files
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
 
@@ -57,7 +58,44 @@ export default function FlashcardSelection({
   const handleSelectModule = (moduleId: number) => {
     console.log("Module selected:", moduleId);
     setSelectedModuleId(moduleId);
+    setSelectedFiles([]); // Reset selected files when changing module
     setError("");
+  };
+
+  const handleToggleFile = (fileUrl: string) => {
+    setSelectedFiles(prev => {
+      if (prev.includes(fileUrl)) {
+        return prev.filter(url => url !== fileUrl);
+      } else {
+        return [...prev, fileUrl];
+      }
+    });
+  };
+
+  const handleSelectAllFiles = () => {
+    if (!selectedModule) return;
+    const items = typeof selectedModule.items === 'string' 
+      ? JSON.parse(selectedModule.items) 
+      : selectedModule.items || [];
+    
+    // Use same filtering logic as display
+    const allFileUrls = items
+      .filter((item: any) => {
+        if (!item.url) return false;
+        const itemName = (item.title || item.name || '').toLowerCase();
+        return item.type === 'File' || 
+               itemName.includes('.pdf') || 
+               itemName.includes('.doc') ||
+               itemName.includes('.ppt') ||
+               itemName.includes('.txt');
+      })
+      .map((item: any) => item.url);
+    
+    setSelectedFiles(allFileUrls);
+  };
+
+  const handleDeselectAllFiles = () => {
+    setSelectedFiles([]);
   };
 
   const handleGenerateFlashcards = async () => {
@@ -66,18 +104,22 @@ export default function FlashcardSelection({
       return;
     }
 
-    console.log("Starting flashcard generation for module:", selectedModuleId);
+    if (selectedFiles.length === 0) {
+      setError("Please select at least one file to generate flashcards from");
+      return;
+    }
+
     setGenerating(true);
     setError("");
 
     try {
-      // Generate 15 flashcards (default)
-      const result = await flashcardsAPI.generateFromModule(selectedModuleId, 15);
+      const flashcardCount = 15; // default count
+      const result = await flashcardsAPI.generateFromModule(selectedModuleId, flashcardCount, selectedFiles);
       
       console.log("Flashcards generated successfully:", result.flashcards.length);
       
-      // Navigate to study page with the generated flashcards
-      onStartStudying(result.flashcards);
+      // Navigate to study page with the generated flashcards, module ID, and count
+      onStartStudying(result.flashcards, selectedModuleId, flashcardCount);
       
     } catch (err: any) {
       console.error("Generation error:", err);
@@ -127,7 +169,7 @@ export default function FlashcardSelection({
           <div className="flex items-center gap-4">
             <Sparkles className="size-5 text-accent shrink-0" />
             <p className="text-foreground text-sm">
-              Select a module below and click "Generate Flashcards" to create AI-powered study materials.
+              Click on a module to expand, select the files you want, then click "Generate Flashcards" to create AI-powered study materials.
             </p>
           </div>
         </div>
@@ -154,41 +196,124 @@ export default function FlashcardSelection({
             </div>
           ) : (
             <div className="space-y-3">
-              {modules.map((module) => (
-                <button
-                  key={module.id}
-                  onClick={() => handleSelectModule(module.id)}
-                  disabled={generating}
-                  className={`w-full bg-card rounded-2xl p-5 border-2 transition-all text-left ${
-                    selectedModuleId === module.id
-                      ? "border-accent shadow-lg shadow-accent/10"
-                      : "border-border hover:border-accent/50"
-                  } ${generating ? "opacity-50 cursor-not-allowed" : ""}`}
-                >
-                  <div className="flex items-start gap-4">
-                    <div
-                      className={`size-4 mt-0.5 rounded-full shrink-0 flex items-center justify-center border-2 transition-colors ${
-                        selectedModuleId === module.id
-                          ? "bg-accent border-accent"
-                          : "border-muted-foreground"
-                      }`}
+              {modules.map((module) => {
+                const isSelected = selectedModuleId === module.id;
+                const items = typeof module.items === 'string'
+                  ? JSON.parse(module.items)
+                  : module.items || [];
+                
+                // Filter for files
+                const fileItems = items.filter((item: any) => {
+                  if (!item.url) return false;
+                  const itemName = (item.title || item.name || '').toLowerCase();
+                  return item.type === 'File' || 
+                         itemName.includes('.pdf') || 
+                         itemName.includes('.doc') ||
+                         itemName.includes('.ppt') ||
+                         itemName.includes('.txt');
+                });
+
+                return (
+                  <div
+                    key={module.id}
+                    className={`bg-card rounded-2xl border-2 transition-all ${
+                      isSelected
+                        ? "border-accent shadow-lg shadow-accent/10"
+                        : "border-border"
+                    } ${generating ? "opacity-50 cursor-not-allowed" : ""}`}
+                  >
+                    {/* Module Header */}
+                    <button
+                      onClick={() => handleSelectModule(module.id)}
+                      disabled={generating}
+                      className="w-full p-5 text-left hover:bg-accent/5 transition-colors rounded-2xl"
                     >
-                      {selectedModuleId === module.id && (
-                        <div className="size-2 rounded-full bg-primary-foreground" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <BookOpen className="size-4 text-accent" />
-                        <h4 className="text-foreground">{module.name}</h4>
+                      <div className="flex items-start gap-4">
+                        <div
+                          className={`size-4 mt-0.5 rounded-full shrink-0 flex items-center justify-center border-2 transition-colors ${
+                            isSelected
+                              ? "bg-accent border-accent"
+                              : "border-muted-foreground"
+                          }`}
+                        >
+                          {isSelected && (
+                            <div className="size-2 rounded-full bg-primary-foreground" />
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <BookOpen className="size-4 text-accent" />
+                            <h4 className="text-foreground">{module.name}</h4>
+                          </div>
+                          <p className="text-muted-foreground text-sm">
+                            {fileItems.length} file{fileItems.length !== 1 ? 's' : ''} available
+                          </p>
+                        </div>
+                        <ChevronDown 
+                          className={`size-5 text-muted-foreground transition-transform ${
+                            isSelected ? 'rotate-180' : ''
+                          }`}
+                        />
                       </div>
-                      <p className="text-muted-foreground text-sm">
-                        {module.items.length} {module.items.length === 1 ? 'item' : 'items'}
-                      </p>
-                    </div>
+                    </button>
+
+                    {/* Expanded File Selection */}
+                    {isSelected && (
+                      <div className="px-5 pb-5 border-t border-border/50 animate-in fade-in slide-in-from-top-2 duration-200">
+                        <div className="pt-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-sm font-medium text-foreground">Select Files</h4>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={handleSelectAllFiles}
+                                className="text-xs px-2 py-1 rounded bg-accent/10 hover:bg-accent/20 text-accent transition-colors"
+                              >
+                                All
+                              </button>
+                              <button
+                                onClick={handleDeselectAllFiles}
+                                className="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
+                              >
+                                None
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2 max-h-60 overflow-y-auto">
+                            {fileItems.length === 0 ? (
+                              <p className="text-muted-foreground text-sm text-center py-4">
+                                No files available
+                              </p>
+                            ) : (
+                              fileItems.map((item: any, index: number) => {
+                                const itemTitle = item.title || item.name || 'Untitled';
+                                return (
+                                  <label
+                                    key={index}
+                                    className="flex items-start gap-2 p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedFiles.includes(item.url)}
+                                      onChange={() => handleToggleFile(item.url)}
+                                      className="mt-0.5 size-4 rounded border-2 border-muted-foreground checked:bg-accent checked:border-accent cursor-pointer"
+                                    />
+                                    <span className="text-sm text-foreground flex-1">{itemTitle}</span>
+                                  </label>
+                                );
+                              })
+                            )}
+                          </div>
+
+                          <p className="text-muted-foreground text-xs mt-3">
+                            {selectedFiles.length} selected
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

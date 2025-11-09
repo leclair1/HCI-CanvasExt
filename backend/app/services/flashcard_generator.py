@@ -184,12 +184,31 @@ JSON array:"""
             if start >= 0 and end > start:
                 content_text = content_text[start:end]
         
+        # Clean the JSON text before parsing
+        # Fix common issues like unescaped quotes in strings
+        content_text = content_text.replace('\\"', '"')  # Fix escaped quotes
+        content_text = content_text.replace("'", "'")  # Fix smart quotes
+        content_text = content_text.replace('"', '"')  # Fix smart quotes
+        content_text = content_text.replace('"', '"')  # Fix smart quotes
+        
         # Parse JSON
-        flashcards = json.loads(content_text)
+        try:
+            flashcards = json.loads(content_text)
+        except json.JSONDecodeError:
+            # Try more aggressive cleaning
+            import re
+            # Remove any text before first [ and after last ]
+            match = re.search(r'\[.*\]', content_text, re.DOTALL)
+            if match:
+                content_text = match.group(0)
+                flashcards = json.loads(content_text)
+            else:
+                raise
         
         return flashcards
         
     except json.JSONDecodeError as e:
+        print(f"Failed to parse JSON. Content was:\n{content_text[:500]}")
         raise ValueError(f"Failed to parse LLM response as JSON: {e}")
     except Exception as e:
         raise ValueError(f"Flashcard generation failed: {e}")
