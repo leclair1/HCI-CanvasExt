@@ -213,3 +213,129 @@ JSON array:"""
     except Exception as e:
         raise ValueError(f"Flashcard generation failed: {e}")
 
+
+def generate_quiz_with_groq(
+    content: str,
+    module_name: str,
+    num_questions: int = 10
+) -> List[Dict[str, str]]:
+    """
+    Generate quiz questions from content using Groq LLM
+    """
+    groq_api_key = settings.GROQ_API_KEY
+    if not groq_api_key:
+        raise ValueError("GROQ_API_KEY not configured. Please set it in .env file")
+    
+    # Truncate content if too long
+    max_content_length = 8000
+    if len(content) > max_content_length:
+        content = content[:max_content_length] + "..."
+    
+    # Create prompt for quiz generation
+    prompt = f"""You are an expert educational content creator. Generate exactly {num_questions} multiple-choice quiz questions from the following course material.
+
+IMPORTANT GUIDELINES:
+1. Create diverse question types:
+   - Factual recall: "What is...?"
+   - Conceptual understanding: "Why does...?"
+   - Application: "Which would be best for...?"
+   - Analysis: "How does X relate to Y?"
+
+2. Each question must have:
+   - Clear, unambiguous question text
+   - Four answer options (A, B, C, D)
+   - Only ONE correct answer
+   - Plausible distractors (wrong answers that seem reasonable)
+
+3. Requirements:
+   - Questions should test understanding, not just memorization
+   - Options should be roughly equal length
+   - Avoid "all of the above" or "none of the above"
+   - Base questions strictly on the provided content
+
+4. Return ONLY valid JSON array, no other text
+
+CONTENT FROM: {module_name}
+
+TEXT:
+{content}
+
+Generate exactly {num_questions} questions in this JSON format:
+[
+  {{
+    "question": "What is...",
+    "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
+    "correct_answer": "A"
+  }}
+]
+
+JSON array:"""
+
+    try:
+        response = requests.post(
+            GROQ_API_URL,
+            headers={
+                "Authorization": f"Bearer {groq_api_key}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": MODEL,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are an expert educational content creator who generates high-quality multiple-choice quiz questions. Always return valid JSON."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "temperature": 0.7,
+                "max_tokens": 2500
+            },
+            timeout=60
+        )
+        
+        if response.status_code != 200:
+            raise ValueError(f"Groq API error: {response.status_code}")
+        
+        result = response.json()
+        content_text = result['choices'][0]['message']['content'].strip()
+        
+        # Extract JSON
+        if "```json" in content_text:
+            content_text = content_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in content_text:
+            content_text = content_text.split("```")[1].split("```")[0].strip()
+        elif "[" in content_text:
+            start = content_text.find("[")
+            end = content_text.rfind("]") + 1
+            if start >= 0 and end > start:
+                content_text = content_text[start:end]
+        
+        # Clean the JSON text before parsing
+        content_text = content_text.replace('\\"', '"')
+        content_text = content_text.replace("'", "'")
+        content_text = content_text.replace('"', '"')
+        content_text = content_text.replace('"', '"')
+        
+        # Parse JSON
+        try:
+            questions = json.loads(content_text)
+        except json.JSONDecodeError:
+            import re
+            match = re.search(r'\[.*\]', content_text, re.DOTALL)
+            if match:
+                content_text = match.group(0)
+                questions = json.loads(content_text)
+            else:
+                raise
+        
+        return questions
+        
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse JSON. Content was:\n{content_text[:500]}")
+        raise ValueError(f"Failed to parse LLM response as JSON: {e}")
+    except Exception as e:
+        raise ValueError(f"Quiz generation failed: {e}")
+

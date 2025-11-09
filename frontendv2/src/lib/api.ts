@@ -274,6 +274,33 @@ export const flashcardsAPI = {
     return response.json();
   },
 
+  async generateQuizFromModule(moduleId: number, numQuestions: number, fileUrls?: string[]): Promise<{ questions: any[], module_name: string, count: number }> {
+    const token = tokenManager.getToken();
+    if (!token) {
+      throw new Error("Not authenticated");
+    }
+    
+    const response = await fetch(`${API_BASE_URL}/quizzes/generate`, {
+      method: "POST",
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        module_id: moduleId,
+        num_questions: numQuestions,
+        ...(fileUrls && fileUrls.length > 0 && { file_urls: fileUrls })
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: "Failed to generate quiz" }));
+      throw new Error(error.detail);
+    }
+
+    return response.json();
+  },
+
   async saveDeck(deckName: string, flashcards: any[], courseId: number, moduleId: number) {
     const token = tokenManager.getToken();
     if (!token) {

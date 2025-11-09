@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronLeft, Save, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, Save, Sparkles, RotateCw } from "lucide-react";
 import svgPaths from "../imports/svg-lf8pijpzil";
 import imgAiTutorLogo from "figma:asset/831d76f506f1dc02aaa78fa1316452543accee12.png";
 
@@ -10,6 +10,9 @@ interface QuizProps {
   onNavigateToAITutor: () => void;
   onSaveQuiz?: (questions: QuizQuestion[], answers: QuizAnswer[]) => void;
   onGenerateNewQuiz?: () => void;
+  quizQuestions?: any[];
+  isRegenerating?: boolean;
+  onSwitchToFlashcards?: () => void;
 }
 
 interface QuizQuestion {
@@ -26,7 +29,7 @@ interface QuizAnswer {
   isCorrect: boolean;
 }
 
-const quizQuestions: QuizQuestion[] = [
+const defaultQuizQuestions: QuizQuestion[] = [
   {
     id: 1,
     question: "Which data structure uses LIFO (Last In, First Out)?",
@@ -35,18 +38,41 @@ const quizQuestions: QuizQuestion[] = [
   }
 ];
 
-export default function Quiz({ onBack, onComplete, onStartStudying, onNavigateToAITutor, onSaveQuiz, onGenerateNewQuiz }: QuizProps) {
+export default function Quiz({ 
+  onBack, 
+  onComplete, 
+  onStartStudying, 
+  onNavigateToAITutor, 
+  onSaveQuiz, 
+  onGenerateNewQuiz,
+  quizQuestions: providedQuestions,
+  isRegenerating = false,
+  onSwitchToFlashcards
+}: QuizProps) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [answers, setAnswers] = useState<QuizAnswer[]>([]);
   const [isSaved, setIsSaved] = useState(false);
+  const [hasSubmittedCurrent, setHasSubmittedCurrent] = useState(false);
+
+  // Transform provided questions to match interface
+  const quizQuestions: QuizQuestion[] = providedQuestions && providedQuestions.length > 0
+    ? providedQuestions.map((q: any, index: number) => ({
+        id: index + 1,
+        question: q.question,
+        options: q.options || [],
+        correctAnswer: q.options && q.correct_answer 
+          ? q.options[q.correct_answer.charCodeAt(0) - 65] // Convert A,B,C,D to index
+          : q.correct_answer
+      }))
+    : defaultQuizQuestions;
 
   const question = quizQuestions[currentQuestion];
   const progress = ((currentQuestion + 1) / quizQuestions.length) * 100;
   const answeredCount = answers.length;
 
   const handleSubmit = () => {
-    if (!selectedAnswer) return;
+    if (!selectedAnswer || hasSubmittedCurrent) return;
 
     const newAnswer: QuizAnswer = {
       question: question.question,
@@ -57,20 +83,32 @@ export default function Quiz({ onBack, onComplete, onStartStudying, onNavigateTo
 
     const updatedAnswers = [...answers, newAnswer];
     setAnswers(updatedAnswers);
+    setHasSubmittedCurrent(true);
+  };
 
-    const score = updatedAnswers.filter(a => a.isCorrect).length;
-    onComplete(score, quizQuestions.length, updatedAnswers);
+  const handleNext = () => {
+    if (currentQuestion < quizQuestions.length - 1) {
+      // Move to next question
+      setCurrentQuestion(currentQuestion + 1);
+      setSelectedAnswer(null);
+      setHasSubmittedCurrent(false);
+    } else {
+      // Last question - show results
+      const score = answers.filter(a => a.isCorrect).length;
+      onComplete(score, quizQuestions.length, answers);
+    }
   };
 
   const handlePrevious = () => {
     if (currentQuestion > 0) {
       setCurrentQuestion(currentQuestion - 1);
       setSelectedAnswer(null);
+      setHasSubmittedCurrent(false);
     }
   };
 
   const handleSaveQuiz = () => {
-    if (onSaveQuiz) {
+    if (onSaveQuiz && answers.length > 0) {
       onSaveQuiz(quizQuestions, answers);
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 2000);
@@ -105,8 +143,12 @@ export default function Quiz({ onBack, onComplete, onStartStudying, onNavigateTo
                 </svg>
               </div>
               <div>
-                <h1 className="text-foreground">Smart Study Tools</h1>
-                <p className="text-muted-foreground text-sm">CS 101 - Introduction to Computer Science</p>
+                <h1 className="text-foreground">AI-Generated Quiz</h1>
+                <p className="text-muted-foreground text-sm">
+                  {providedQuestions && providedQuestions.length > 0 
+                    ? `${quizQuestions.length} questions` 
+                    : "Practice Quiz"}
+                </p>
               </div>
             </div>
             
@@ -114,23 +156,36 @@ export default function Quiz({ onBack, onComplete, onStartStudying, onNavigateTo
               {/* Save Quiz Button */}
               <button
                 onClick={handleSaveQuiz}
+                disabled={answers.length === 0}
                 className={`h-9 px-4 rounded-lg transition-all text-sm flex items-center gap-2 ${
                   isSaved
                     ? "bg-accent text-primary-foreground"
                     : "bg-card hover:bg-accent/20 border border-border text-foreground"
-                }`}
+                } ${answers.length === 0 ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 <Save className="size-4" />
-                {isSaved ? "Saved!" : "Save Quiz"}
+                {isSaved ? "Saved!" : answers.length > 0 ? `Save Quiz (${answers.length}/${quizQuestions.length})` : "Save Quiz"}
               </button>
 
               {/* Generate New Button */}
               <button
                 onClick={onGenerateNewQuiz}
-                className="h-9 px-4 rounded-lg bg-gradient-to-r from-accent/10 to-primary/10 hover:from-accent/20 hover:to-primary/20 border border-accent/30 text-foreground transition-all text-sm flex items-center gap-2"
+                disabled={isRegenerating}
+                className={`h-9 px-4 rounded-lg bg-gradient-to-r from-accent/10 to-primary/10 hover:from-accent/20 hover:to-primary/20 border border-accent/30 text-foreground transition-all text-sm flex items-center gap-2 ${
+                  isRegenerating ? "opacity-50 cursor-not-allowed" : ""
+                }`}
               >
-                <Sparkles className="size-4" />
-                Generate New
+                {isRegenerating ? (
+                  <>
+                    <RotateCw className="size-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="size-4" />
+                    Generate New
+                  </>
+                )}
               </button>
 
               {/* AI Tutor Badge */}
@@ -148,12 +203,12 @@ export default function Quiz({ onBack, onComplete, onStartStudying, onNavigateTo
         {/* Mode Tabs */}
         <div className="bg-muted rounded-2xl p-1 mb-16 inline-flex">
           <button 
-            onClick={onStartStudying}
-            className="px-8 h-7 rounded-xl text-sm text-muted-foreground hover:text-foreground"
+            onClick={onSwitchToFlashcards || onStartStudying}
+            className="px-8 h-7 rounded-xl text-sm text-muted-foreground hover:text-foreground transition-all"
           >
             Flashcards
           </button>
-          <button className="px-8 h-7 rounded-xl text-sm bg-card text-foreground shadow-sm">
+          <button className="px-8 h-7 rounded-xl text-sm bg-card text-foreground shadow-sm transition-all">
             Practice Quiz
           </button>
         </div>
@@ -181,33 +236,73 @@ export default function Quiz({ onBack, onComplete, onStartStudying, onNavigateTo
             <h3 className="text-foreground mt-4">{question.question}</h3>
           </div>
 
+          {/* Feedback Message */}
+          {hasSubmittedCurrent && (
+            <div className={`mb-4 p-4 rounded-lg border-2 ${
+              selectedAnswer === question.correctAnswer
+                ? "bg-green-500/10 border-green-500"
+                : "bg-red-500/10 border-red-500"
+            }`}>
+              <p className={`font-medium ${
+                selectedAnswer === question.correctAnswer ? "text-green-600" : "text-red-600"
+              }`}>
+                {selectedAnswer === question.correctAnswer ? "✓ Correct!" : "✗ Incorrect"}
+              </p>
+              {selectedAnswer !== question.correctAnswer && (
+                <p className="text-sm text-foreground mt-1">
+                  The correct answer is: <span className="font-medium text-green-600">{question.correctAnswer}</span>
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="space-y-2">
-            {question.options.map((option) => (
-              <button
-                key={option}
-                onClick={() => setSelectedAnswer(option)}
-                className={`w-full rounded-lg p-4 text-left border-2 transition-all ${
-                  selectedAnswer === option
-                    ? "border-accent bg-accent/10"
-                    : "border-border hover:border-accent/50"
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <div
-                    className={`size-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                      selectedAnswer === option
-                        ? "border-accent bg-accent"
-                        : "border-muted-foreground"
-                    }`}
-                  >
-                    {selectedAnswer === option && (
-                      <div className="size-2 rounded-full bg-primary-foreground" />
-                    )}
+            {question.options.map((option) => {
+              const isCorrect = option === question.correctAnswer;
+              const isSelected = selectedAnswer === option;
+              const isWrong = hasSubmittedCurrent && isSelected && !isCorrect;
+              const shouldShowCorrect = hasSubmittedCurrent && isCorrect;
+
+              return (
+                <button
+                  key={option}
+                  onClick={() => !hasSubmittedCurrent && setSelectedAnswer(option)}
+                  disabled={hasSubmittedCurrent}
+                  className={`w-full rounded-lg p-4 text-left border-2 transition-all ${
+                    shouldShowCorrect
+                      ? "border-green-500 bg-green-500/10"
+                      : isWrong
+                        ? "border-red-500 bg-red-500/10"
+                        : isSelected
+                          ? "border-accent bg-accent/10"
+                          : "border-border hover:border-accent/50"
+                  } ${hasSubmittedCurrent ? "cursor-default" : ""}`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div
+                      className={`size-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+                        shouldShowCorrect
+                          ? "border-green-500 bg-green-500"
+                          : isWrong
+                            ? "border-red-500 bg-red-500"
+                            : isSelected
+                              ? "border-accent bg-accent"
+                              : "border-muted-foreground"
+                      }`}
+                    >
+                      {(isSelected || shouldShowCorrect) && (
+                        <div className="size-2 rounded-full bg-white" />
+                      )}
+                    </div>
+                    <span className={`${
+                      shouldShowCorrect ? "text-green-600 font-medium" : isWrong ? "text-red-600" : "text-foreground"
+                    }`}>
+                      {option}
+                    </span>
                   </div>
-                  <span className="text-foreground">{option}</span>
-                </div>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -215,7 +310,7 @@ export default function Quiz({ onBack, onComplete, onStartStudying, onNavigateTo
         <div className="flex items-center justify-between">
           <button
             onClick={handlePrevious}
-            disabled={currentQuestion === 0}
+            disabled={currentQuestion === 0 || hasSubmittedCurrent}
             className="flex items-center gap-2 h-9 px-4 rounded-lg bg-card hover:bg-accent/20 border border-border text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
             <ChevronLeft className="size-4" />
@@ -223,11 +318,22 @@ export default function Quiz({ onBack, onComplete, onStartStudying, onNavigateTo
           </button>
 
           <button
-            onClick={handleSubmit}
-            disabled={!selectedAnswer}
-            className="h-9 px-4 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            onClick={hasSubmittedCurrent ? handleNext : handleSubmit}
+            disabled={!selectedAnswer && !hasSubmittedCurrent}
+            className="h-9 px-4 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center gap-2"
           >
-            Submit Quiz
+            {hasSubmittedCurrent ? (
+              currentQuestion < quizQuestions.length - 1 ? (
+                <>
+                  Next Question
+                  <ChevronRight className="size-4" />
+                </>
+              ) : (
+                "View Results"
+              )
+            ) : (
+              "Submit Answer"
+            )}
           </button>
         </div>
       </main>

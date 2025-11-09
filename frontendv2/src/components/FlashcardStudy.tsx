@@ -10,6 +10,7 @@ interface FlashcardStudyProps {
   onNavigateToAITutor: () => void;
   flashcards?: any[];
   isRegenerating?: boolean;
+  onSwitchToQuiz?: () => void; // New prop for switching to quiz with same files
 }
 
 interface Flashcard {
@@ -38,7 +39,8 @@ export default function FlashcardStudy({
   onGenerateNewDeck, 
   onNavigateToAITutor,
   flashcards: providedFlashcards,
-  isRegenerating = false
+  isRegenerating = false,
+  onSwitchToQuiz
 }: FlashcardStudyProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -148,22 +150,13 @@ export default function FlashcardStudy({
         {/* Mode Tabs */}
         <div className="bg-muted rounded-2xl p-1 mb-16 inline-flex">
           <button
-            onClick={() => setMode("flashcards")}
-            className={`px-8 h-7 rounded-xl text-sm transition-all ${
-              mode === "flashcards"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+            className="px-8 h-7 rounded-xl text-sm bg-card text-foreground shadow-sm transition-all"
           >
             Flashcards
           </button>
           <button
-            onClick={onStartQuiz}
-            className={`px-8 h-7 rounded-xl text-sm transition-all ${
-              mode === "quiz"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+            onClick={onSwitchToQuiz || onStartQuiz}
+            className="px-8 h-7 rounded-xl text-sm text-muted-foreground hover:text-foreground transition-all"
           >
             Practice Quiz
           </button>

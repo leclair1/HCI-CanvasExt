@@ -1,15 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ChevronLeft, BookOpen, Sparkles, Bookmark, Loader2, ChevronDown } from "lucide-react";
 import imgAiTutorLogo from "figma:asset/831d76f506f1dc02aaa78fa1316452543accee12.png";
 import { modulesAPI, Module, flashcardsAPI } from "../lib/api";
 
 interface FlashcardSelectionProps {
   onBack: () => void;
-  onStartStudying: (flashcards?: any[], moduleId?: number, count?: number) => void;
-  onStartQuiz: () => void;
+  onStartStudying: (flashcards?: any[], moduleId?: number, count?: number, files?: string[]) => void;
+  onStartQuiz: (quizQuestions?: any[], moduleId?: number, files?: string[]) => void;
   onViewSavedDecks: () => void;
+  onViewSavedQuizzes?: () => void;
   onNavigateToAITutor: () => void;
   savedDecksCount: number;
+  savedQuizzesCount?: number;
   courseId: number;
   courseCode?: string;
   courseName?: string;
@@ -19,9 +21,11 @@ export default function FlashcardSelection({
   onBack, 
   onStartStudying, 
   onStartQuiz, 
-  onViewSavedDecks, 
+  onViewSavedDecks,
+  onViewSavedQuizzes, 
   onNavigateToAITutor, 
-  savedDecksCount, 
+  savedDecksCount,
+  savedQuizzesCount = 0, 
   courseId,
   courseCode = "CS 101", 
   courseName = "Introduction to Computer Science" 
@@ -32,10 +36,27 @@ export default function FlashcardSelection({
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]); // URLs of selected files
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
+  const [mode, setMode] = useState<"flashcard" | "quiz">("flashcard");
+  const isInitialMount = useRef(true);
 
   useEffect(() => {
     fetchModules();
   }, [courseId]);
+
+  // Auto-generate when switching modes if files are already selected
+  useEffect(() => {
+    // Skip on initial mount
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    // If user switched modes with files selected, auto-generate
+    if (selectedModuleId && selectedFiles.length > 0 && !generating) {
+      console.log(`Mode switched to ${mode}, auto-generating...`);
+      handleGenerate();
+    }
+  }, [mode]);
 
   const fetchModules = async () => {
     try {
@@ -98,14 +119,14 @@ export default function FlashcardSelection({
     setSelectedFiles([]);
   };
 
-  const handleGenerateFlashcards = async () => {
+  const handleGenerate = async () => {
     if (!selectedModuleId) {
       setError("Please select a module first");
       return;
     }
 
     if (selectedFiles.length === 0) {
-      setError("Please select at least one file to generate flashcards from");
+      setError(`Please select at least one file to generate ${mode === "flashcard" ? "flashcards" : "quiz questions"} from`);
       return;
     }
 
@@ -113,17 +134,25 @@ export default function FlashcardSelection({
     setError("");
 
     try {
-      const flashcardCount = 15; // default count
-      const result = await flashcardsAPI.generateFromModule(selectedModuleId, flashcardCount, selectedFiles);
-      
-      console.log("Flashcards generated successfully:", result.flashcards.length);
-      
-      // Navigate to study page with the generated flashcards, module ID, and count
-      onStartStudying(result.flashcards, selectedModuleId, flashcardCount);
+      if (mode === "flashcard") {
+        const flashcardCount = 15;
+        const result = await flashcardsAPI.generateFromModule(selectedModuleId, flashcardCount, selectedFiles);
+        
+        console.log("Flashcards generated successfully:", result.flashcards.length);
+        onStartStudying(result.flashcards, selectedModuleId, flashcardCount, selectedFiles);
+      } else {
+        // Quiz mode
+        const quizCount = 10; // Generate 10 quiz questions
+        const result = await flashcardsAPI.generateQuizFromModule(selectedModuleId, quizCount, selectedFiles);
+        
+        console.log("Quiz generated successfully:", result.questions.length);
+        // Navigate to quiz with the generated questions
+        onStartQuiz(result.questions, selectedModuleId, selectedFiles);
+      }
       
     } catch (err: any) {
       console.error("Generation error:", err);
-      setError(err.message || "Failed to generate flashcards. Please try again.");
+      setError(err.message || `Failed to generate ${mode === "flashcard" ? "flashcards" : "quiz"}. Please try again.`);
       setGenerating(false);
     }
   };
@@ -164,12 +193,39 @@ export default function FlashcardSelection({
           </div>
         </div>
 
+        {/* Mode Toggle */}
+        <div className="bg-muted rounded-2xl p-1 mb-6 inline-flex">
+          <button
+            onClick={() => setMode("flashcard")}
+            className={`px-8 h-10 rounded-xl text-sm transition-all ${
+              mode === "flashcard"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Flashcards
+          </button>
+          <button
+            onClick={() => setMode("quiz")}
+            className={`px-8 h-10 rounded-xl text-sm transition-all ${
+              mode === "quiz"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Quiz
+          </button>
+        </div>
+
         {/* Info Banner */}
         <div className="bg-gradient-to-r from-accent/10 to-primary/10 rounded-2xl p-5 border border-accent/30 mb-8">
           <div className="flex items-center gap-4">
             <Sparkles className="size-5 text-accent shrink-0" />
             <p className="text-foreground text-sm">
-              Click on a module to expand, select the files you want, then click "Generate Flashcards" to create AI-powered study materials.
+              {mode === "flashcard" 
+                ? "Click on a module to expand, select the files you want, then generate AI-powered flashcards."
+                : "Click on a module to expand, select the files you want, then generate AI-powered quiz questions."
+              }
             </p>
           </div>
         </div>
@@ -321,27 +377,34 @@ export default function FlashcardSelection({
         {/* Generate Button */}
         <div className="flex gap-3">
           <button
-            onClick={onViewSavedDecks}
+            onClick={mode === "flashcard" ? onViewSavedDecks : (onViewSavedQuizzes || onViewSavedDecks)}
             className="h-12 px-6 bg-card rounded-lg text-foreground hover:bg-accent/20 border border-border transition-colors text-sm flex items-center gap-2"
           >
             <Bookmark className="size-4" />
-            Saved Decks ({savedDecksCount})
+            {mode === "flashcard" ? `Saved Decks (${savedDecksCount})` : `Saved Quizzes (${savedQuizzesCount})`}
           </button>
           
           <button
-            onClick={handleGenerateFlashcards}
-            disabled={!selectedModuleId || generating}
+            onClick={handleGenerate}
+            disabled={!selectedModuleId || selectedFiles.length === 0 || generating}
             className="flex-1 h-12 bg-primary rounded-lg text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
           >
             {generating ? (
               <>
                 <Loader2 className="size-5 animate-spin" />
-                Generating Flashcards...
+                {mode === "flashcard" ? "Generating Flashcards..." : "Generating Quiz..."}
               </>
             ) : (
               <>
                 <Sparkles className="size-5" />
-                {selectedModuleId ? 'Generate Flashcards (15 cards)' : 'Select a Module to Generate'}
+                {!selectedModuleId 
+                  ? 'Select a Module to Generate'
+                  : selectedFiles.length === 0
+                    ? 'Select Files to Generate'
+                    : mode === "flashcard" 
+                      ? `Generate Flashcards (${selectedFiles.length} ${selectedFiles.length === 1 ? 'file' : 'files'})`
+                      : `Generate Quiz (${selectedFiles.length} ${selectedFiles.length === 1 ? 'file' : 'files'})`
+                }
               </>
             )}
           </button>

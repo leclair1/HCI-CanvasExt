@@ -38,6 +38,15 @@ interface FlashcardDeck {
   cards: Flashcard[];
 }
 
+interface SavedQuiz {
+  id: string;
+  name: string;
+  createdAt: string;
+  questions: any[];
+  answers?: QuizAnswer[];
+  score?: number;
+}
+
 export default function App() {
   const [currentView, setCurrentView] = useState<View>("login");
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -45,11 +54,14 @@ export default function App() {
   const [quizTotal, setQuizTotal] = useState(0);
   const [quizAnswers, setQuizAnswers] = useState<QuizAnswer[]>([]);
   const [savedDecks, setSavedDecks] = useState<FlashcardDeck[]>([]);
+  const [savedQuizzes, setSavedQuizzes] = useState<SavedQuiz[]>([]);
   const [currentDeck, setCurrentDeck] = useState<Flashcard[]>([]);
   const [selectedCourse, setSelectedCourse] = useState({ id: 0, code: "CS 101", name: "Introduction to Computer Science" });
   const [generatedFlashcards, setGeneratedFlashcards] = useState<any[]>([]);
+  const [generatedQuizQuestions, setGeneratedQuizQuestions] = useState<any[]>([]);
   const [currentModuleId, setCurrentModuleId] = useState<number | null>(null);
   const [currentFlashcardCount, setCurrentFlashcardCount] = useState<number>(15);
+  const [currentSelectedFiles, setCurrentSelectedFiles] = useState<string[]>([]);
   const [isRegenerating, setIsRegenerating] = useState(false);
 
   const toggleDarkMode = () => {
@@ -138,14 +150,97 @@ export default function App() {
     }
   };
 
-  const handleSaveQuiz = () => {
-    // Placeholder for saving quiz functionality
-    console.log("Quiz saved!");
+  const handleSaveQuiz = (questions: any[], answers: QuizAnswer[]) => {
+    const score = answers.filter(a => a.isCorrect).length;
+    const newQuiz: SavedQuiz = {
+      id: Date.now().toString(),
+      name: `Quiz - ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`,
+      createdAt: new Date().toISOString(),
+      questions: questions,
+      answers: answers,
+      score: score
+    };
+    setSavedQuizzes([newQuiz, ...savedQuizzes]);
+    console.log("Quiz saved successfully!", newQuiz);
   };
 
-  const handleGenerateNewQuiz = () => {
-    // Placeholder for generating new quiz functionality
-    console.log("Generating new quiz...");
+  const handleGenerateNewQuiz = async () => {
+    if (currentModuleId === null) {
+      console.error("No module ID stored, cannot regenerate quiz");
+      return;
+    }
+
+    setIsRegenerating(true);
+    try {
+      console.log(`Regenerating quiz for module ${currentModuleId}`);
+      
+      // Import the API
+      const { flashcardsAPI } = await import("./lib/api");
+      
+      // Call the API to regenerate quiz (using 10 questions by default)
+      const result = await flashcardsAPI.generateQuizFromModule(currentModuleId, 10, currentSelectedFiles);
+      
+      console.log("New quiz generated successfully:", result.questions.length);
+      
+      // Update the generated quiz questions
+      setGeneratedQuizQuestions(result.questions);
+      
+    } catch (error: any) {
+      console.error("Failed to regenerate quiz:", error);
+      alert("Failed to generate new quiz. Please try again.");
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+  const handleSwitchToQuiz = async () => {
+    if (currentModuleId === null || currentSelectedFiles.length === 0) {
+      console.error("No module/files stored, cannot generate quiz");
+      setCurrentView("quiz"); // Still go to quiz, will show default
+      return;
+    }
+
+    setIsRegenerating(true);
+    setCurrentView("quiz"); // Navigate immediately
+    
+    try {
+      const { flashcardsAPI } = await import("./lib/api");
+      const result = await flashcardsAPI.generateQuizFromModule(currentModuleId, 10, currentSelectedFiles);
+      
+      console.log("Quiz generated from same files:", result.questions.length);
+      setGeneratedQuizQuestions(result.questions);
+      
+    } catch (error: any) {
+      console.error("Failed to generate quiz:", error);
+      alert("Failed to generate quiz. Please try again.");
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+  const handleSwitchToFlashcards = async () => {
+    if (currentModuleId === null || currentSelectedFiles.length === 0) {
+      console.error("No module/files stored, cannot generate flashcards");
+      setCurrentView("flashcard-study"); // Still go to flashcards, will show default
+      return;
+    }
+
+    setIsRegenerating(true);
+    setCurrentView("flashcard-study"); // Navigate immediately
+    
+    try {
+      const { flashcardsAPI } = await import("./lib/api");
+      const result = await flashcardsAPI.generateFromModule(currentModuleId, currentFlashcardCount, currentSelectedFiles);
+      
+      console.log("Flashcards generated from same files:", result.flashcards.length);
+      setGeneratedFlashcards(result.flashcards);
+      
+    } catch (error: any) {
+      console.error("Failed to generate flashcards:", error);
+      alert("Failed to generate flashcards. Please try again.");
+    } finally {
+      setIsRegenerating(false);
+    }
   };
 
   const handleLogin = () => {
@@ -225,7 +320,7 @@ export default function App() {
       {currentView === "flashcard-selection" && (
         <FlashcardSelection
           onBack={() => setCurrentView("course-selection")}
-          onStartStudying={(flashcards, moduleId, count) => {
+          onStartStudying={(flashcards, moduleId, count, files) => {
             if (flashcards) {
               console.log("Received generated flashcards:", flashcards);
               setGeneratedFlashcards(flashcards);
@@ -236,12 +331,29 @@ export default function App() {
             if (count !== undefined) {
               setCurrentFlashcardCount(count);
             }
+            if (files) {
+              setCurrentSelectedFiles(files);
+            }
             setCurrentView("flashcard-study");
           }}
-          onStartQuiz={() => setCurrentView("quiz")}
+          onStartQuiz={(quizQuestions, moduleId, files) => {
+            if (quizQuestions) {
+              console.log("Received generated quiz questions:", quizQuestions);
+              setGeneratedQuizQuestions(quizQuestions);
+            }
+            if (moduleId !== undefined) {
+              setCurrentModuleId(moduleId);
+            }
+            if (files) {
+              setCurrentSelectedFiles(files);
+            }
+            setCurrentView("quiz");
+          }}
           onViewSavedDecks={() => setCurrentView("saved-flashcards")}
+          onViewSavedQuizzes={() => setCurrentView("saved-flashcards")} // Reuse same view for now
           onNavigateToAITutor={() => setCurrentView("ai-tutor")}
           savedDecksCount={savedDecks.length}
+          savedQuizzesCount={savedQuizzes.length}
           courseId={selectedCourse.id}
           courseCode={selectedCourse.code}
           courseName={selectedCourse.name}
@@ -256,14 +368,24 @@ export default function App() {
           onNavigateToAITutor={() => setCurrentView("ai-tutor")}
           flashcards={generatedFlashcards}
           isRegenerating={isRegenerating}
+          onSwitchToQuiz={handleSwitchToQuiz}
         />
       )}
       {currentView === "saved-flashcards" && (
         <SavedFlashcards
           onBack={() => setCurrentView("flashcard-selection")}
           savedDecks={savedDecks}
+          savedQuizzes={savedQuizzes}
           onDeleteDeck={handleDeleteDeck}
+          onDeleteQuiz={(quizId) => setSavedQuizzes(savedQuizzes.filter(q => q.id !== quizId))}
           onStudyDeck={handleStudyDeck}
+          onRetakeQuiz={(quizId) => {
+            const quiz = savedQuizzes.find(q => q.id === quizId);
+            if (quiz) {
+              setGeneratedQuizQuestions(quiz.questions);
+              setCurrentView("quiz");
+            }
+          }}
           onNavigateToAITutor={() => setCurrentView("ai-tutor")}
         />
       )}
@@ -275,6 +397,9 @@ export default function App() {
           onNavigateToAITutor={() => setCurrentView("ai-tutor")}
           onSaveQuiz={handleSaveQuiz}
           onGenerateNewQuiz={handleGenerateNewQuiz}
+          quizQuestions={generatedQuizQuestions}
+          isRegenerating={isRegenerating}
+          onSwitchToFlashcards={handleSwitchToFlashcards}
         />
       )}
       {currentView === "quiz-results" && (

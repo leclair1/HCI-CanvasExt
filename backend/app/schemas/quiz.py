@@ -73,8 +73,16 @@ class QuizResult(BaseModel):
     attempt_id: int
 
 class GenerateQuizRequest(BaseModel):
+    module_id: int
+    num_questions: int = 10
+    file_urls: List[str] = []
     course_id: Optional[int] = None
-    num_questions: int = 5
     topics: Optional[List[str]] = None
+
+class GenerateQuizResponse(BaseModel):
+    """Response model for generated quiz questions"""
+    questions: List[dict]
+    module_name: str
+    count: int
 
 

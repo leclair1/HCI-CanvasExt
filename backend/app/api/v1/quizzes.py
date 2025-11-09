@@ -5,11 +5,14 @@ from typing import List
 from app.db.database import get_db
 from app.models.user import User
 from app.models.quiz import Quiz, QuizQuestion, QuizAttempt, QuizAnswer
+from app.models.module import Module
 from app.schemas.quiz import (
     QuizCreate, Quiz as QuizSchema, QuizPublic, QuizQuestionPublic,
-    QuizSubmit, QuizResult, QuizResultAnswer, GenerateQuizRequest
+    QuizSubmit, QuizResult, QuizResultAnswer, GenerateQuizRequest, GenerateQuizResponse
 )
 from app.api.v1.auth import get_current_user
+from app.core.encryption import decrypt_data
+from app.services.flashcard_generator import generate_quiz_with_groq, extract_text_from_url
 
 router = APIRouter()
 
@@ -154,83 +157,109 @@ async def submit_quiz(
         attempt_id=attempt.id
     )
 
-@router.post("/generate", response_model=QuizPublic)
+@router.post("/generate", response_model=GenerateQuizResponse)
 async def generate_quiz(
     request: GenerateQuizRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Generate a new quiz with AI (mock implementation)"""
-    # This is a mock implementation - in production, you'd use AI to generate questions
-    # For now, we'll return a sample quiz
+    """Generate quiz questions from module content using AI"""
     
-    sample_questions = [
-        {
-            "question_text": "Which data structure uses LIFO (Last In, First Out)?",
-            "option_a": "Queue",
-            "option_b": "Stack",
-            "option_c": "Array",
-            "option_d": "Linked List",
-            "correct_answer": "B"
-        },
-        {
-            "question_text": "What is the time complexity of binary search?",
-            "option_a": "O(n)",
-            "option_b": "O(n^2)",
-            "option_c": "O(log n)",
-            "option_d": "O(1)",
-            "correct_answer": "C"
-        },
-        {
-            "question_text": "Which sorting algorithm has the best average case performance?",
-            "option_a": "Bubble Sort",
-            "option_b": "Selection Sort",
-            "option_c": "Quick Sort",
-            "option_d": "Insertion Sort",
-            "correct_answer": "C"
-        }
-    ]
+    # Get the module
+    module = db.query(Module).filter(Module.id == request.module_id).first()
+    if not module:
+        raise HTTPException(status_code=404, detail="Module not found")
     
-    # Create quiz
-    new_quiz = Quiz(
-        user_id=current_user.id,
-        title="Generated Quiz",
-        description="AI-generated practice quiz",
-        course_id=request.course_id
-    )
-    db.add(new_quiz)
-    db.flush()
+    print(f"\n=== Generating quiz for module: {module.name} ===")
     
-    # Add questions
-    questions_public = []
-    for idx, q_data in enumerate(sample_questions[:request.num_questions]):
-        question = QuizQuestion(
-            quiz_id=new_quiz.id,
-            question_text=q_data["question_text"],
-            option_a=q_data["option_a"],
-            option_b=q_data["option_b"],
-            option_c=q_data["option_c"],
-            option_d=q_data["option_d"],
-            correct_answer=q_data["correct_answer"],
-            order=idx
+    # Get user's Canvas session cookie
+    if not current_user.canvas_session_cookie:
+        raise HTTPException(
+            status_code=400,
+            detail="Canvas session cookie not available"
         )
-        db.add(question)
-        db.flush()
+    
+    # Decrypt session cookie
+    session_cookie = decrypt_data(current_user.canvas_session_cookie)
+    
+    # Extract text from module items
+    all_text = ""
+    items_processed = 0
+    
+    print(f"\n=== Processing module: {module.name} ===")
+    
+    # Parse items if they're stored as JSON string
+    import json as json_lib
+    items = module.items
+    if isinstance(items, str):
+        items = json_lib.loads(items)
+    elif items is None:
+        items = []
+    
+    print(f"Module has {len(items)} items")
+    
+    # If specific file URLs were provided, use only those
+    if request.file_urls and len(request.file_urls) > 0:
+        print(f"Using {len(request.file_urls)} user-selected files")
+        for file_url in request.file_urls:
+            item_name = next((item.get('title', 'Unknown') for item in items if item.get('url') == file_url), 'Unknown')
+            
+            print(f"Processing selected file: {item_name}")
+            text = extract_text_from_url(
+                file_url,
+                session_cookie,
+                current_user.canvas_instance_url or "https://usflearn.instructure.com"
+            )
+            if text and len(text) > 50:
+                print(f"  Extracted {len(text)} characters")
+                all_text += text + "\n\n"
+                items_processed += 1
+            else:
+                print(f"  Failed to extract text or too short")
+    else:
+        # Default behavior: process all items
+        for item in items[:10]:
+            item_url = item.get('url', '')
+            item_name = item.get('title', '') or item.get('name', '')
+            
+            if item_url and '.pdf' in item_name.lower():
+                print(f"  Extracting PDF: {item_name}")
+                text = extract_text_from_url(
+                    item_url,
+                    session_cookie,
+                    current_user.canvas_instance_url or "https://usflearn.instructure.com"
+                )
+                if text and len(text) > 50:
+                    print(f"  Extracted {len(text)} characters")
+                    all_text += text + "\n\n"
+                    items_processed += 1
+    
+    print(f"Total text extracted: {len(all_text)} characters from {items_processed} items")
+    
+    if len(all_text) < 200:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not enough content found in module '{module.name}'. Try a module with PDF files or more content."
+        )
+    
+    # Generate quiz using Groq
+    try:
+        print(f"Sending to Groq for quiz generation...")
+        questions = generate_quiz_with_groq(
+            content=all_text,
+            module_name=module.name,
+            num_questions=request.num_questions
+        )
+        print(f"Generated {len(questions)} quiz questions")
         
-        questions_public.append(QuizQuestionPublic(
-            id=question.id,
-            question_text=question.question_text,
-            options=[q_data["option_a"], q_data["option_b"], q_data["option_c"], q_data["option_d"]]
-        ))
-    
-    db.commit()
-    
-    return QuizPublic(
-        id=new_quiz.id,
-        title=new_quiz.title,
-        description=new_quiz.description,
-        questions=questions_public
-    )
+        return GenerateQuizResponse(
+            questions=questions,
+            module_name=module.name,
+            count=len(questions)
+        )
+        
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/{quiz_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_quiz(
