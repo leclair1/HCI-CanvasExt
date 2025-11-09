@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from app.api.v1 import (
     courses, assignments, flashcards, chat, study_sessions, settings, canvas,
-    auth, quizzes, saved_decks, profile, dashboard
+    auth, quizzes, saved_decks, profile, dashboard, modules
 )
 
 api_router = APIRouter()
@@ -19,9 +19,10 @@ api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboar
 # Canvas Integration
 api_router.include_router(canvas.router, prefix="/canvas", tags=["canvas-integration"])
 
-# Courses & Assignments
+# Courses, Assignments & Modules
 api_router.include_router(courses.router, prefix="/courses", tags=["courses"])
 api_router.include_router(assignments.router, prefix="/assignments", tags=["assignments"])
+api_router.include_router(modules.router, prefix="/modules", tags=["modules"])
 
 # Study Tools
 api_router.include_router(flashcards.router, prefix="/flashcards", tags=["flashcards"])

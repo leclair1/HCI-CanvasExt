@@ -17,6 +17,7 @@ class User(Base):
     canvas_user_id = Column(String, unique=True, nullable=True)
     canvas_instance_url = Column(String, nullable=True)  # e.g., https://canvas.instructure.com
     canvas_access_token = Column(String, nullable=True)  # Canvas API key
+    canvas_session_cookie = Column(String, nullable=True)  # Encrypted Canvas session cookie
     
     # Notification settings
     email_notifications = Column(Boolean, default=True)

@@ -77,3 +77,4 @@ class GenerateQuizRequest(BaseModel):
     num_questions: int = 5
     topics: Optional[List[str]] = None
 
+

@@ -71,3 +71,4 @@ class QuizAnswer(Base):
     # Relationships
     attempt = relationship("QuizAttempt", back_populates="answers")
 
+

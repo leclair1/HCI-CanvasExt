@@ -8,8 +8,12 @@ from pydantic import BaseModel, Field
 from app.db.database import get_db
 from app.services.canvas_client import CanvasClient, CanvasAuthError
 from app.services.canvas_sync import CanvasSyncService
+from app.services.canvas_scraper import CanvasScraper
 from app.models.user import User
+from app.models.course import Course
+from app.models.module import Module
 from datetime import datetime
+from typing import List, Dict
 
 router = APIRouter()
 
@@ -238,6 +242,127 @@ async def sync_assignments_only(
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class CanvasScraperRequest(BaseModel):
+    """Request model for Canvas scraping with session cookie"""
+    canvas_url: str = Field(..., description="Canvas instance URL")
+    session_cookie: str = Field(..., description="Canvas session cookie value")
+    user_id: int = Field(..., description="User ID to associate courses with")
+
+
+class CanvasScraperResponse(BaseModel):
+    """Response model for Canvas scraping"""
+    success: bool
+    courses_imported: int
+    modules_imported: int
+    message: str
+
+
+@router.post("/scrape-courses", response_model=CanvasScraperResponse)
+def scrape_canvas_courses(
+    request: CanvasScraperRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Scrape courses from Canvas using session cookie
+    
+    This endpoint:
+    1. Scrapes all active courses from Canvas
+    2. Imports them into the database
+    3. Imports all modules for each course
+    
+    Use this when users create an account with their Canvas session cookie
+    """
+    try:
+        # Verify user exists
+        user = db.query(User).filter(User.id == request.user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Create scraper
+        scraper = CanvasScraper(
+            base_url=request.canvas_url,
+            session_cookie=request.session_cookie
+        )
+        
+        # Scrape all active courses
+        courses_data = scraper.scrape_all_active_courses()
+        
+        # Import colors for courses
+        colors = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", 
+                  "#06B6D4", "#F97316", "#84CC16", "#A855F7"]
+        
+        courses_imported = 0
+        modules_imported = 0
+        
+        # Import each course
+        for idx, course_data in enumerate(courses_data):
+            canvas_id = course_data['id']
+            name = course_data['name']
+            
+            # Check if course already exists
+            existing = db.query(Course).filter(Course.canvas_id == canvas_id).first()
+            
+            if existing:
+                course = existing
+            else:
+                # Extract course code from name
+                code = name.split('.')[0] if '.' in name else name.split()[0]
+                
+                # Create new course
+                course = Course(
+                    canvas_id=canvas_id,
+                    user_id=request.user_id,
+                    code=code,
+                    name=name,
+                    instructor="TBD",
+                    term="Current Semester",
+                    progress=0.0,
+                    color=colors[idx % len(colors)],
+                    is_active=1
+                )
+                
+                db.add(course)
+                db.flush()
+                courses_imported += 1
+            
+            # Import modules
+            for pos, module_data in enumerate(course_data.get('modules', [])):
+                module_name = module_data.get('name', 'Unnamed Module')
+                
+                # Check if module already exists
+                existing_module = db.query(Module).filter(
+                    Module.course_id == course.id,
+                    Module.name == module_name
+                ).first()
+                
+                if not existing_module:
+                    module = Module(
+                        course_id=course.id,
+                        name=module_name,
+                        position=pos,
+                        items=module_data.get('items', [])
+                    )
+                    db.add(module)
+                    modules_imported += 1
+        
+        db.commit()
+        
+        return CanvasScraperResponse(
+            success=True,
+            courses_imported=courses_imported,
+            modules_imported=modules_imported,
+            message=f"Successfully imported {courses_imported} courses and {modules_imported} modules"
+        )
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Scraping failed: {str(e)}"
+        )
+
 
 
 

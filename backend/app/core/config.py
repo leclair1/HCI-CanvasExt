@@ -10,9 +10,14 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
+    # Canvas Configuration
+    CANVAS_INSTANCE_URL: str = "https://usflearn.instructure.com"
+    CANVAS_SESSION_COOKIE: str | None = None
+    
     # API Keys
     OPENAI_API_KEY: str | None = None
     ANTHROPIC_API_KEY: str | None = None
+    GROQ_API_KEY: str | None = None
     
     # CORS
     CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]

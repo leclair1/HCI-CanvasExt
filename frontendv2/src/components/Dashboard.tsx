@@ -1,15 +1,17 @@
 import { Clock, BookOpen, Award, ChevronRight, Sparkles, Calendar } from "lucide-react";
 import { useEffect, useState } from "react";
-import { tokenManager } from "../lib/api";
+import { tokenManager, coursesAPI, Course } from "../lib/api";
 
 interface DashboardProps {
-  onNavigateToCourse: (courseCode: string, courseName: string) => void;
+  onNavigateToCourse: (courseId: number, courseCode: string, courseName: string) => void;
   onNavigateToPlanner: () => void;
 }
 
 export default function Dashboard({ onNavigateToCourse, onNavigateToPlanner }: DashboardProps) {
   const [userName, setUserName] = useState("Student");
   const [studyStreak, setStudyStreak] = useState(0);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const user = tokenManager.getUser();
@@ -17,7 +19,21 @@ export default function Dashboard({ onNavigateToCourse, onNavigateToPlanner }: D
       setUserName(user.first_name);
       setStudyStreak(user.study_streak_days);
     }
+    
+    // Fetch courses from API
+    fetchCourses();
   }, []);
+  
+  const fetchCourses = async () => {
+    try {
+      const data = await coursesAPI.getCourses(true); // Get active courses only
+      setCourses(data);
+    } catch (error) {
+      console.error("Failed to fetch courses:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -98,51 +114,47 @@ export default function Dashboard({ onNavigateToCourse, onNavigateToPlanner }: D
         {/* My Courses */}
         <div className="mb-8">
           <h2 className="text-foreground mb-5">My Courses</h2>
-          <div className="grid grid-cols-4 gap-5">
-            <button
-              onClick={() => onNavigateToCourse("CS 101", "Introduction to Computer Science")}
-              className="bg-card rounded-2xl p-5 border border-border hover:border-accent transition-colors cursor-pointer text-left"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <h3 className="text-foreground mb-1">CS 101</h3>
-                  <p className="text-muted-foreground text-sm">Introduction to Computer Science</p>
-                </div>
-                <ChevronRight className="size-4 text-muted-foreground" />
-              </div>
-              <div className="mt-4">
-                <div className="flex items-center justify-between text-sm mb-1">
-                  <span className="text-muted-foreground">Progress</span>
-                  <span className="text-foreground">68%</span>
-                </div>
-                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-accent rounded-full" style={{ width: "68%" }} />
-                </div>
-              </div>
-            </button>
-
-            <button
-              onClick={() => onNavigateToCourse("MATH 201", "Calculus II")}
-              className="bg-card rounded-2xl p-5 border border-border hover:border-accent transition-colors cursor-pointer text-left"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <h3 className="text-foreground mb-1">MATH 201</h3>
-                  <p className="text-muted-foreground text-sm">Calculus II</p>
-                </div>
-                <ChevronRight className="size-4 text-muted-foreground" />
-              </div>
-              <div className="mt-4">
-                <div className="flex items-center justify-between text-sm mb-1">
-                  <span className="text-muted-foreground">Progress</span>
-                  <span className="text-foreground">52%</span>
-                </div>
-                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-accent rounded-full" style={{ width: "52%" }} />
-                </div>
-              </div>
-            </button>
-          </div>
+          
+          {loading ? (
+            <div className="text-center py-12 text-muted-foreground">
+              Loading courses...
+            </div>
+          ) : courses.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              No courses found. Please sync your Canvas account.
+            </div>
+          ) : (
+            <div className="grid grid-cols-4 gap-5">
+              {courses.map((course) => (
+                <button
+                  key={course.id}
+                  onClick={() => onNavigateToCourse(course.id, course.code, course.name)}
+                  className="bg-card rounded-2xl p-5 border border-border hover:border-accent transition-colors cursor-pointer text-left"
+                  style={{ borderLeftColor: course.color, borderLeftWidth: '4px' }}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <h3 className="text-foreground mb-1">{course.code}</h3>
+                      <p className="text-muted-foreground text-sm line-clamp-2">{course.name}</p>
+                    </div>
+                    <ChevronRight className="size-4 text-muted-foreground" />
+                  </div>
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between text-sm mb-1">
+                      <span className="text-muted-foreground">Progress</span>
+                      <span className="text-foreground">{Math.round(course.progress)}%</span>
+                    </div>
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className="h-full rounded-full transition-all" 
+                        style={{ width: `${course.progress}%`, backgroundColor: course.color }} 
+                      />
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Bottom Section */}

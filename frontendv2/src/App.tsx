@@ -46,7 +46,8 @@ export default function App() {
   const [quizAnswers, setQuizAnswers] = useState<QuizAnswer[]>([]);
   const [savedDecks, setSavedDecks] = useState<FlashcardDeck[]>([]);
   const [currentDeck, setCurrentDeck] = useState<Flashcard[]>([]);
-  const [selectedCourse, setSelectedCourse] = useState({ code: "CS 101", name: "Introduction to Computer Science" });
+  const [selectedCourse, setSelectedCourse] = useState({ id: 0, code: "CS 101", name: "Introduction to Computer Science" });
+  const [generatedFlashcards, setGeneratedFlashcards] = useState<any[]>([]);
 
   const toggleDarkMode = () => {
     const newMode = !isDarkMode;
@@ -78,8 +79,8 @@ export default function App() {
     }
   };
 
-  const handleCourseSelect = (courseCode: string, courseName: string) => {
-    setSelectedCourse({ code: courseCode, name: courseName });
+  const handleCourseSelect = (courseId: number, courseCode: string, courseName: string) => {
+    setSelectedCourse({ id: courseId, code: courseCode, name: courseName });
     setCurrentView("flashcard-selection");
   };
 
@@ -178,8 +179,8 @@ export default function App() {
       {/* Main Content */}
       {currentView === "dashboard" && (
         <Dashboard 
-          onNavigateToCourse={(courseCode: string, courseName: string) => {
-            setSelectedCourse({ code: courseCode, name: courseName });
+          onNavigateToCourse={(courseId: number, courseCode: string, courseName: string) => {
+            setSelectedCourse({ id: courseId, code: courseCode, name: courseName });
             setCurrentView("course-details");
           }}
           onNavigateToPlanner={() => setCurrentView("planner")}
@@ -188,8 +189,14 @@ export default function App() {
       {currentView === "course-details" && (
         <CourseDetails
           onBack={() => setCurrentView("dashboard")}
-          onNavigateToFlashcards={() => setCurrentView("flashcard-selection")}
+          onNavigateToFlashcards={() => {
+            // Make sure courseId is set before navigating
+            if (selectedCourse.id) {
+              setCurrentView("flashcard-selection");
+            }
+          }}
           onNavigateToAITutor={() => setCurrentView("ai-tutor")}
+          courseId={selectedCourse.id}
           courseCode={selectedCourse.code}
           courseName={selectedCourse.name}
         />
@@ -203,11 +210,18 @@ export default function App() {
       {currentView === "flashcard-selection" && (
         <FlashcardSelection
           onBack={() => setCurrentView("course-selection")}
-          onStartStudying={() => setCurrentView("flashcard-study")}
+          onStartStudying={(flashcards) => {
+            if (flashcards) {
+              console.log("Received generated flashcards:", flashcards);
+              setGeneratedFlashcards(flashcards);
+            }
+            setCurrentView("flashcard-study");
+          }}
           onStartQuiz={() => setCurrentView("quiz")}
           onViewSavedDecks={() => setCurrentView("saved-flashcards")}
           onNavigateToAITutor={() => setCurrentView("ai-tutor")}
           savedDecksCount={savedDecks.length}
+          courseId={selectedCourse.id}
           courseCode={selectedCourse.code}
           courseName={selectedCourse.name}
         />
@@ -219,6 +233,7 @@ export default function App() {
           onSaveDeck={handleSaveDeck}
           onGenerateNewDeck={handleGenerateNewDeck}
           onNavigateToAITutor={() => setCurrentView("ai-tutor")}
+          flashcards={generatedFlashcards}
         />
       )}
       {currentView === "saved-flashcards" && (

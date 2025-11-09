@@ -8,7 +8,8 @@ class UserSignup(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8)
     canvas_api_key: Optional[str] = None
-    canvas_instance_url: Optional[str] = "https://canvas.instructure.com"
+    canvas_instance_url: Optional[str] = "https://usflearn.instructure.com"
+    canvas_session_cookie: Optional[str] = None  # Canvas session cookie for scraping
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -38,4 +39,5 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: Optional[str] = None
+
 

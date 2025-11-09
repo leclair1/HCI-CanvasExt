@@ -605,3 +605,4 @@ Now:
 **Backend:** FastAPI with hot reload  
 **No Local Dependencies:** Everything runs in containers
 
+

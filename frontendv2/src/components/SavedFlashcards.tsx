@@ -1,4 +1,5 @@
-import { ChevronLeft, BookOpen, Trash2, Play } from "lucide-react";
+import { ChevronLeft, BookOpen, Trash2, Play, Search } from "lucide-react";
+import { useState, useMemo } from "react";
 import imgAiTutorLogo from "figma:asset/831d76f506f1dc02aaa78fa1316452543accee12.png";
 
 interface Flashcard {
@@ -23,6 +24,18 @@ interface SavedFlashcardsProps {
 }
 
 export default function SavedFlashcards({ onBack, savedDecks, onDeleteDeck, onStudyDeck, onNavigateToAITutor }: SavedFlashcardsProps) {
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Filter decks based on search query
+  const filteredDecks = useMemo(() => {
+    if (!searchQuery.trim()) return savedDecks;
+    
+    const query = searchQuery.toLowerCase();
+    return savedDecks.filter(deck => 
+      deck.name.toLowerCase().includes(query)
+    );
+  }, [savedDecks, searchQuery]);
+
   return (
     <div className="min-h-screen bg-background">
       <main className="pt-24 px-12 max-w-4xl mx-auto pb-12">
@@ -58,6 +71,27 @@ export default function SavedFlashcards({ onBack, savedDecks, onDeleteDeck, onSt
           </div>
         </div>
 
+        {/* Search Bar */}
+        {savedDecks.length > 0 && (
+          <div className="mb-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search saved decks..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full h-10 pl-10 pr-4 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            {searchQuery && (
+              <p className="text-muted-foreground text-sm mt-2">
+                Found {filteredDecks.length} deck{filteredDecks.length !== 1 ? 's' : ''}
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Saved Decks */}
         {savedDecks.length === 0 ? (
           <div className="bg-card rounded-2xl p-12 border border-border text-center">
@@ -67,9 +101,17 @@ export default function SavedFlashcards({ onBack, savedDecks, onDeleteDeck, onSt
               Save flashcard decks while studying to access them later
             </p>
           </div>
+        ) : filteredDecks.length === 0 ? (
+          <div className="bg-card rounded-2xl p-12 border border-border text-center">
+            <Search className="size-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-foreground mb-2">No decks found</h3>
+            <p className="text-muted-foreground text-sm">
+              No decks match your search query
+            </p>
+          </div>
         ) : (
           <div className="space-y-4">
-            {savedDecks.map((deck) => (
+            {filteredDecks.map((deck) => (
               <div
                 key={deck.id}
                 className="bg-card rounded-2xl p-5 border border-border hover:border-accent/50 transition-all"

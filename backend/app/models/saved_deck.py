@@ -34,3 +34,4 @@ class SavedFlashcard(Base):
     # Relationships
     deck = relationship("SavedFlashcardDeck", back_populates="cards")
 
+

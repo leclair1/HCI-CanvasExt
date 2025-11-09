@@ -8,8 +8,12 @@ from typing import Optional
 
 from app.db.database import get_db
 from app.models.user import User
+from app.models.course import Course
+from app.models.module import Module
 from app.schemas.auth import UserSignup, UserLogin, UserResponse, Token, TokenData
 from app.core.config import settings
+from app.core.encryption import encrypt_data, decrypt_data
+from app.services.canvas_scraper import CanvasScraper
 
 router = APIRouter()
 
@@ -62,7 +66,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 
 @router.post("/signup", response_model=Token, status_code=status.HTTP_201_CREATED)
 async def signup(user_data: UserSignup, db: Session = Depends(get_db)):
-    """Register a new user"""
+    """Register a new user and optionally import their Canvas courses"""
     # Check if user already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
@@ -70,6 +74,11 @@ async def signup(user_data: UserSignup, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
         )
+    
+    # Encrypt Canvas session cookie if provided
+    encrypted_session = ""
+    if user_data.canvas_session_cookie:
+        encrypted_session = encrypt_data(user_data.canvas_session_cookie)
     
     # Create new user
     hashed_password = get_password_hash(user_data.password)
@@ -79,12 +88,62 @@ async def signup(user_data: UserSignup, db: Session = Depends(get_db)):
         email=user_data.email,
         password_hash=hashed_password,
         canvas_access_token=user_data.canvas_api_key,
-        canvas_instance_url=user_data.canvas_instance_url
+        canvas_instance_url=user_data.canvas_instance_url,
+        canvas_session_cookie=encrypted_session
     )
     
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+    
+    # Auto-import Canvas courses if session cookie was provided
+    if user_data.canvas_session_cookie and user_data.canvas_instance_url:
+        try:
+            scraper = CanvasScraper(
+                base_url=user_data.canvas_instance_url,
+                session_cookie=user_data.canvas_session_cookie
+            )
+            
+            courses_data = scraper.scrape_all_active_courses()
+            colors = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", 
+                      "#06B6D4", "#F97316", "#84CC16", "#A855F7"]
+            
+            # Import courses for this user
+            for idx, course_data in enumerate(courses_data):
+                canvas_id = course_data['id']
+                name = course_data['name']
+                code = name.split('.')[0] if '.' in name else name.split()[0]
+                
+                course = Course(
+                    canvas_id=canvas_id,
+                    user_id=new_user.id,
+                    code=code,
+                    name=name,
+                    instructor="TBD",
+                    term="Current Semester",
+                    progress=0.0,
+                    color=colors[idx % len(colors)],
+                    is_active=1
+                )
+                
+                db.add(course)
+                db.flush()
+                
+                # Import modules
+                for pos, module_data in enumerate(course_data.get('modules', [])):
+                    module = Module(
+                        course_id=course.id,
+                        name=module_data.get('name', 'Unnamed Module'),
+                        position=pos,
+                        items=module_data.get('items', [])
+                    )
+                    db.add(module)
+            
+            db.commit()
+            
+        except Exception as e:
+            # Don't fail signup if Canvas import fails
+            print(f"Canvas import failed during signup: {e}")
     
     # Create access token
     access_token = create_access_token(data={"sub": new_user.email})
@@ -125,4 +184,5 @@ async def logout(current_user: User = Depends(get_current_user)):
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information"""
     return UserResponse.from_orm(current_user)
+
 

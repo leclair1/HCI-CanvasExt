@@ -8,6 +8,7 @@ interface FlashcardStudyProps {
   onSaveDeck: (cards: Flashcard[]) => void;
   onGenerateNewDeck: () => void;
   onNavigateToAITutor: () => void;
+  flashcards?: any[];
 }
 
 interface Flashcard {
@@ -16,7 +17,7 @@ interface Flashcard {
   answer: string;
 }
 
-const flashcards: Flashcard[] = [
+const defaultFlashcards: Flashcard[] = [
   {
     id: 1,
     question: "What is a data structure?",
@@ -29,11 +30,21 @@ const flashcards: Flashcard[] = [
   }
 ];
 
-export default function FlashcardStudy({ onBack, onStartQuiz, onSaveDeck, onGenerateNewDeck, onNavigateToAITutor }: FlashcardStudyProps) {
+export default function FlashcardStudy({ 
+  onBack, 
+  onStartQuiz, 
+  onSaveDeck, 
+  onGenerateNewDeck, 
+  onNavigateToAITutor,
+  flashcards: providedFlashcards
+}: FlashcardStudyProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [mode, setMode] = useState<"flashcards" | "quiz">("flashcards");
   const [isSaved, setIsSaved] = useState(false);
+
+  // Use provided flashcards or default ones
+  const flashcards = providedFlashcards && providedFlashcards.length > 0 ? providedFlashcards : defaultFlashcards;
 
   const currentCard = flashcards[currentIndex];
   const progress = ((currentIndex + 1) / flashcards.length) * 100;

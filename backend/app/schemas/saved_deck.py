@@ -45,3 +45,4 @@ class SavedDeckList(BaseModel):
     class Config:
         from_attributes = True
 
+

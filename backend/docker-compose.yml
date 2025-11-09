@@ -27,6 +27,8 @@ services:
     container_name: canvas_ext_backend
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
       # Database
       DATABASE_URL: postgresql://canvas_user:canvas_password@postgres:5432/canvas_ext
@@ -39,15 +41,24 @@ services:
       # CORS
       CORS_ORIGINS: '["http://localhost:5173", "http://localhost:3000", "http://localhost:5174"]'
       
-      # Optional AI Keys
+      # Canvas Config
+      CANVAS_INSTANCE_URL: ${CANVAS_INSTANCE_URL:-https://usflearn.instructure.com}
+      CANVAS_SESSION_COOKIE: ${CANVAS_SESSION_COOKIE:-}
+      
+      # AI API Keys
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - ./app:/app/app
       - ./seed_data.py:/app/seed_data.py
+      - ./import_canvas_data.py:/app/import_canvas_data.py
+      - ./create_test_user.py:/app/create_test_user.py
+      - ./canvas_data.json:/app/canvas_data.json
+      - ./flashcards_groq.json:/app/flashcards_groq.json
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     networks:
       - canvas_network
