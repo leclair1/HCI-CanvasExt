@@ -2,14 +2,30 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.models.course import Course as CourseModel
+from app.models.user import User
 from app.schemas.course import Course, CourseCreate, CourseUpdate
+from app.api.v1.auth import get_current_user
+from typing import Optional
 
 router = APIRouter()
 
 @router.get("/", response_model=list[Course])
-def get_courses(db: Session = Depends(get_db)):
-    """Get all courses"""
-    return db.query(CourseModel).all()
+def get_courses(
+    active_only: bool = True, 
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """Get all courses for the current user (active by default)"""
+    query = db.query(CourseModel)
+    
+    # Filter by current user if authenticated
+    if current_user:
+        query = query.filter(CourseModel.user_id == current_user.id)
+    
+    if active_only:
+        query = query.filter(CourseModel.is_active == 1)
+    
+    return query.all()
 
 @router.get("/{course_id}", response_model=Course)
 def get_course(course_id: str, db: Session = Depends(get_db)):
@@ -58,6 +74,8 @@ def delete_course(course_id: str, db: Session = Depends(get_db)):
     db.delete(db_course)
     db.commit()
     return None
+
+
 
 
 

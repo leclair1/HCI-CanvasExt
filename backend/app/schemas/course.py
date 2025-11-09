@@ -20,10 +20,14 @@ class CourseUpdate(BaseModel):
     color: str | None = None
 
 class Course(CourseBase):
-    id: str
+    id: int
+    canvas_id: str | None = None
+    is_active: int = 1
     
     class Config:
         from_attributes = True
+
+
 
 
 

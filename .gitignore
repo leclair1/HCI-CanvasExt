@@ -1,0 +1,76 @@
+# Root-level gitignore for HCI-CanvasExt project
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+**/.env
+**/.env.local
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+env/
+ENV/
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker volumes
+docker-compose.override.yml
+
+# Temporary files
+*.tmp
+*.temp
+.cache
+
+# Coverage reports
+coverage/
+.nyc_output/
+
+# PDFs (might contain sensitive info)
+*.pdf
+
+# Local test scripts and data files (root directory only)
+/canvas_*.py
+/test_*.py
+/create_flashcards*.py
+/list_my_courses.py
+/show_flashcards.py
+/quick_test_free_model.py
+/*.json
+/canvas_downloads/
+/setup_test_user.bat
+/import-to-backend.bat
+
+

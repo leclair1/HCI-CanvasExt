@@ -2,104 +2,87 @@
 
 FastAPI backend for the Canvas LMS Browser Extension. Provides REST APIs for courses, assignments, flashcards, AI tutoring, and study tracking.
 
-## 🚀 Quick Start with Docker (Recommended)
+## ⚡ NEW: Frontend V2 Updates
+
+The backend has been updated to fully support Frontend V2 with:
+- **Authentication** (JWT-based login/signup)
+- **User Profiles** with settings and preferences
+- **Quizzes** with AI generation support
+- **Saved Flashcard Decks**
+- **Dashboard** with study insights and task tracking
+
+📖 **See [FRONTEND_V2_UPDATES.md](./FRONTEND_V2_UPDATES.md) for detailed changes**
+📖 **See [API_REFERENCE_V2.md](./API_REFERENCE_V2.md) for complete API documentation**
+
+## 🚀 Quick Start with Docker (Recommended - No Local Python Needed!)
 
 ### Prerequisites
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed
-- [Git](https://git-scm.com/) (optional)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
 
-### Setup
+### Setup (3 Commands!)
 
-1. **Clone or navigate to the backend directory**
+1. **Navigate to the backend directory**
 ```bash
 cd HCI-CanvasExt/backend
 ```
 
-2. **Start PostgreSQL database with Docker Compose**
-```bash
-docker-compose up -d postgres
-```
-
-This starts a PostgreSQL database on `localhost:5432`
-
-3. **Install Python dependencies**
-```bash
-pip install -r requirements.txt
-```
-
-4. **Set up environment variables**
-```bash
-# Copy the example env file
-cp .env.example .env
-
-# Edit .env and update if needed (default values work for Docker setup)
-```
-
-5. **Seed the database with sample data**
-```bash
-python seed_data.py
-```
-
-6. **Start the FastAPI server**
-```bash
-uvicorn app.main:app --reload
-```
-
-The API will be available at:
-- **API Server**: http://localhost:8000
-- **Interactive API Docs**: http://localhost:8000/api/docs
-- **Alternative Docs**: http://localhost:8000/api/redoc
-
-## 🐳 Full Docker Setup (Backend + Database)
-
-To run both the database and backend in Docker:
-
+2. **Start everything with Docker Compose**
 ```bash
 docker-compose up -d
 ```
 
-This will start:
-- PostgreSQL database on port 5432
-- FastAPI backend on port 8000
+This will:
+- Start PostgreSQL database on port 5432
+- Build and start FastAPI backend on port 8000
+- Set up networking between services
+- Create the database schema automatically
 
-To view logs:
+3. **Verify it's running**
+```bash
+docker-compose ps
+```
+
+The API is now available at:
+- **API Server**: http://localhost:8000
+- **Interactive API Docs**: http://localhost:8000/api/docs
+- **Alternative Docs**: http://localhost:8000/api/redoc
+
+### View Logs
 ```bash
 docker-compose logs -f
 ```
 
-To stop all services:
+### Stop Services
 ```bash
 docker-compose down
 ```
 
-To reset everything (removes database data):
-```bash
-docker-compose down -v
-```
+**✨ That's it!** No pip install, no Python environment setup needed. Everything runs in Docker.
 
-## 🔧 Local Development (SQLite)
+## 🔧 Alternative: Local Development (If You Can't Use Docker)
 
-If you prefer not to use Docker, you can use SQLite:
+If you cannot use Docker, you can run locally with SQLite:
 
-1. **Update `.env` to use SQLite**
-```env
-DATABASE_URL=sqlite:///./canvas_ext.db
-```
+**Note:** This requires Python 3.11+ installed on your machine.
 
-2. **Install dependencies**
+1. **Install Python dependencies**
 ```bash
 pip install -r requirements.txt
 ```
 
-3. **Seed database**
-```bash
-python seed_data.py
+2. **Create `.env` file**
+```env
+DATABASE_URL=sqlite:///./canvas_ext.db
+SECRET_KEY=dev-secret-key-change-in-production
+CORS_ORIGINS=["http://localhost:5173", "http://localhost:3000"]
 ```
 
-4. **Run server**
+3. **Run server (database will be created automatically)**
 ```bash
 uvicorn app.main:app --reload
 ```
+
+⚠️ **Note:** SQLite is not recommended for production. Use PostgreSQL in Docker for best results.
 
 ## 🎓 Canvas LMS Integration
 
@@ -135,6 +118,38 @@ curl http://localhost:8000/api/v1/assignments
 📖 **Full integration guide:** [CANVAS_INTEGRATION.md](./CANVAS_INTEGRATION.md)
 
 ## 📚 API Endpoints
+
+For complete API documentation with examples, see [API_REFERENCE_V2.md](./API_REFERENCE_V2.md)
+
+### Authentication (NEW)
+- `POST /api/v1/auth/signup` - Register new user
+- `POST /api/v1/auth/login` - Login user
+- `POST /api/v1/auth/logout` - Logout user
+- `GET /api/v1/auth/me` - Get current user info
+
+### Profile & Settings (NEW)
+- `GET /api/v1/profile/` - Get user profile
+- `PUT /api/v1/profile/` - Update user profile
+- `PUT /api/v1/profile/notifications` - Update notification settings
+- `PUT /api/v1/profile/appearance` - Update appearance settings
+- `POST /api/v1/profile/change-password` - Change password
+
+### Dashboard (NEW)
+- `GET /api/v1/dashboard/` - Get complete dashboard data
+
+### Quizzes (NEW)
+- `POST /api/v1/quizzes/` - Create quiz
+- `GET /api/v1/quizzes/` - List all quizzes
+- `GET /api/v1/quizzes/{quiz_id}` - Get quiz for taking
+- `POST /api/v1/quizzes/submit` - Submit quiz answers
+- `POST /api/v1/quizzes/generate` - Generate quiz with AI
+- `DELETE /api/v1/quizzes/{quiz_id}` - Delete quiz
+
+### Saved Decks (NEW)
+- `POST /api/v1/saved-decks/` - Create saved flashcard deck
+- `GET /api/v1/saved-decks/` - List all saved decks
+- `GET /api/v1/saved-decks/{deck_id}` - Get saved deck
+- `DELETE /api/v1/saved-decks/{deck_id}` - Delete saved deck
 
 ### Canvas Integration
 - `POST /api/v1/canvas/auth` - Authenticate with Canvas LMS
@@ -201,9 +216,9 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 > **Note**: The current implementation uses mock responses. To integrate real AI, modify `app/api/v1/chat.py` to call the OpenAI or Anthropic APIs.
 
-## 🗄️ Database Management
+## 🗄️ Database Management (Docker)
 
-### PostgreSQL Commands
+### Access PostgreSQL Database
 
 Connect to the database:
 ```bash
@@ -215,14 +230,27 @@ Useful SQL commands:
 -- List all tables
 \dt
 
+-- View users
+SELECT id, first_name, last_name, email FROM users;
+
 -- View courses
 SELECT * FROM courses;
 
--- View assignments
-SELECT * FROM assignments;
+-- View quizzes
+SELECT * FROM quizzes;
 
--- Clear all data
-TRUNCATE courses, assignments, flashcards, study_sessions, chat_messages CASCADE;
+-- Exit
+\q
+```
+
+### Reset Database (Fresh Start)
+
+```bash
+# Stop services and remove volumes
+docker-compose down -v
+
+# Start services (creates fresh database)
+docker-compose up -d
 ```
 
 ### Backup and Restore
@@ -239,13 +267,15 @@ docker exec -i canvas_ext_db psql -U canvas_user canvas_ext < backup.sql
 
 ## 🔒 Security
 
+✅ **Authentication is now implemented!** The API uses JWT tokens for secure authentication.
+
 For production:
-1. Change `SECRET_KEY` in `.env` to a strong random string
-2. Update database credentials
-3. Configure proper CORS origins
-4. Use HTTPS
-5. Implement authentication/authorization
-6. Secure API keys
+1. ✅ JWT authentication implemented
+2. Change `SECRET_KEY` in `.env` to a strong random string (use `openssl rand -hex 32`)
+3. Update database credentials
+4. Configure proper CORS origins
+5. Use HTTPS
+6. Secure API keys (Canvas API tokens are stored per-user)
 
 ## 🧪 Testing
 
@@ -288,43 +318,80 @@ backend/
 
 ## 🐛 Troubleshooting
 
+**Services won't start**
+```bash
+# Check Docker Desktop is running
+docker --version
+
+# View all logs
+docker-compose logs -f
+
+# Restart everything
+docker-compose restart
+```
+
 **Port already in use**
 ```bash
 # Check what's using port 8000
 lsof -i :8000  # macOS/Linux
 netstat -ano | findstr :8000  # Windows
 
-# Use a different port
-uvicorn app.main:app --reload --port 8001
+# Change port in docker-compose.yml
+# Under backend -> ports:
+# Change "8000:8000" to "8001:8000"
 ```
 
 **Database connection errors**
 ```bash
-# Check if PostgreSQL is running
-docker ps
-
-# Restart database
-docker-compose restart postgres
+# Check if containers are running
+docker-compose ps
 
 # View database logs
 docker-compose logs postgres
+
+# Restart database
+docker-compose restart postgres
 ```
 
-**Module not found errors**
+**Backend container keeps restarting**
 ```bash
-# Reinstall dependencies
-pip install -r requirements.txt --force-reinstall
+# View backend logs
+docker-compose logs backend
+
+# Rebuild backend
+docker-compose build backend
+docker-compose up -d backend
+```
+
+**Database schema errors after update**
+```bash
+# Fresh start (removes all data)
+docker-compose down -v
+docker-compose up -d
+
+# The new schema will be created automatically
+```
+
+**Changes to code not reflecting**
+```bash
+# Code is hot-reloaded automatically via volume mount
+# If not working, rebuild:
+docker-compose build backend
+docker-compose up -d backend
 ```
 
 ## 📝 Next Steps
 
-1. **Connect Frontend**: Update frontend to use API instead of mock data
-2. **Add Authentication**: Implement JWT or OAuth
-3. **Real AI Integration**: Connect OpenAI/Anthropic APIs
-4. **File Uploads**: Support uploading course materials (PDFs, videos)
-5. **Real-time Features**: Add WebSocket support for live chat
-6. **Caching**: Implement Redis for better performance
-7. **Monitoring**: Add logging and monitoring tools
+1. ✅ **Authentication**: JWT-based auth implemented
+2. ✅ **User Profiles**: Profile management with settings
+3. ✅ **Quizzes**: Quiz creation and grading system
+4. ✅ **Dashboard**: Student dashboard with insights
+5. **Real AI Integration**: Connect OpenAI/Anthropic APIs for real quiz generation
+6. **File Uploads**: Support uploading course materials (PDFs, videos)
+7. **Real-time Features**: Add WebSocket support for live chat
+8. **Caching**: Implement Redis for better performance
+9. **Monitoring**: Add logging and monitoring tools
+10. **Email Service**: Password reset and notification emails
 
 ## 📖 Additional Resources
 

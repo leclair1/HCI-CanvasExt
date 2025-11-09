@@ -1,14 +1,34 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from datetime import datetime
+from pydantic import BaseModel, Field
+from typing import List
 from app.db.database import get_db
 from app.models.flashcard import Flashcard as FlashcardModel, FlashcardSet as FlashcardSetModel
+from app.models.module import Module
+from app.models.user import User
 from app.schemas.flashcard import (
     Flashcard, FlashcardCreate, FlashcardUpdate, FlashcardReview,
     FlashcardSet, FlashcardSetCreate
 )
+from app.api.v1.auth import get_current_user
+from app.core.encryption import decrypt_data
+from app.services.flashcard_generator import generate_flashcards_with_groq, extract_text_from_url
 
 router = APIRouter()
+
+
+class GenerateFlashcardsRequest(BaseModel):
+    """Request model for generating flashcards"""
+    module_id: int = Field(..., description="Module ID to generate flashcards from")
+    num_cards: int = Field(15, ge=10, le=30, description="Number of flashcards to generate")
+
+
+class GenerateFlashcardsResponse(BaseModel):
+    """Response model for generated flashcards"""
+    flashcards: List[dict]
+    module_name: str
+    count: int
 
 # Flashcard Sets
 @router.get("/sets", response_model=list[FlashcardSet])
@@ -111,6 +131,140 @@ def delete_flashcard(flashcard_id: str, db: Session = Depends(get_db)):
     db.delete(db_flashcard)
     db.commit()
     return None
+
+
+@router.post("/generate", response_model=GenerateFlashcardsResponse)
+async def generate_flashcards_from_module(
+    request: GenerateFlashcardsRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Generate flashcards from a module using pre-generated flashcards or AI
+    
+    This endpoint:
+    1. Fetches the module
+    2. Checks if we have pre-generated flashcards for this module
+    3. If yes, returns them (filtered by count)
+    4. If no, generates new ones using AI
+    """
+    # Get the module
+    module = db.query(Module).filter(Module.id == request.module_id).first()
+    if not module:
+        raise HTTPException(status_code=404, detail="Module not found")
+    
+    print(f"\n=== Generating flashcards for module: {module.name} ===")
+    
+    # Try to load pre-generated flashcards
+    import json
+    from pathlib import Path
+    flashcards_file = Path("/app/flashcards_groq.json")
+    
+    if flashcards_file.exists():
+        with open(flashcards_file, 'r', encoding='utf-8') as f:
+            all_flashcards = json.load(f)
+        
+        # Filter flashcards by module name
+        module_flashcards = [
+            card for card in all_flashcards 
+            if card.get('module', '').lower() in module.name.lower() or 
+               module.name.lower() in card.get('module', '').lower()
+        ]
+        
+        print(f"Found {len(module_flashcards)} pre-generated flashcards for this module")
+        
+        if module_flashcards:
+            # Return the requested number of flashcards
+            flashcards = module_flashcards[:request.num_cards]
+            return GenerateFlashcardsResponse(
+                flashcards=flashcards,
+                module_name=module.name,
+                count=len(flashcards)
+            )
+    
+    # Fallback: Try to generate from scratch
+    # Get user's Canvas session cookie
+    if not current_user.canvas_session_cookie:
+        # Generate generic flashcards if no session cookie
+        raise HTTPException(
+            status_code=400,
+            detail="No pre-generated flashcards found and Canvas session cookie not available. Please try a different module."
+        )
+    
+    # Decrypt session cookie
+    session_cookie = decrypt_data(current_user.canvas_session_cookie)
+    
+    # Extract text from module items
+    all_text = ""
+    items_processed = 0
+    
+    print(f"\n=== Processing module: {module.name} ===")
+    print(f"Module has {len(module.items)} items")
+    
+    for item in module.items[:10]:  # Try up to 10 items
+        item_url = item.get('url', '')
+        item_name = item.get('name', '')
+        
+        print(f"Processing item: {item_name}")
+        
+        if item_url and '.pdf' in item_name.lower():  # Prioritize PDFs
+            print(f"  Extracting PDF: {item_name}")
+            text = extract_text_from_url(
+                item_url,
+                session_cookie,
+                current_user.canvas_instance_url or "https://usflearn.instructure.com"
+            )
+            if text and len(text) > 50:
+                print(f"  Extracted {len(text)} characters")
+                all_text += text + "\n\n"
+                items_processed += 1
+            else:
+                print(f"  Failed to extract text or too short")
+    
+    # If not enough from PDFs, try HTML pages
+    if len(all_text) < 500 and items_processed < 2:
+        for item in module.items[:10]:
+            item_url = item.get('url', '')
+            item_name = item.get('name', '')
+            
+            if item_url and '.pdf' not in item_name.lower():
+                text = extract_text_from_url(
+                    item_url,
+                    session_cookie,
+                    current_user.canvas_instance_url or "https://usflearn.instructure.com"
+                )
+                if text:
+                    all_text += text + "\n\n"
+    
+    print(f"Total text extracted: {len(all_text)} characters from {items_processed} items")
+    print(f"Content preview: {all_text[:300]}...")
+    
+    if len(all_text) < 200:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not enough content found in module '{module.name}'. Try a module with PDF files or more content."
+        )
+    
+    # Generate flashcards using Groq
+    try:
+        print(f"Sending to Groq for flashcard generation...")
+        flashcards = generate_flashcards_with_groq(
+            content=all_text,
+            module_name=module.name,
+            num_cards=request.num_cards
+        )
+        print(f"Generated {len(flashcards)} flashcards")
+        
+        return GenerateFlashcardsResponse(
+            flashcards=flashcards,
+            module_name=module.name,
+            count=len(flashcards)
+        )
+        
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
 
 

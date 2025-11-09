@@ -18,25 +18,58 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - canvas_network
 
-  # FastAPI Backend (optional - can run locally too)
+  # FastAPI Backend
   backend:
     build: .
     container_name: canvas_ext_backend
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
+      # Database
       DATABASE_URL: postgresql://canvas_user:canvas_password@postgres:5432/canvas_ext
-      CORS_ORIGINS: '["http://localhost:5173", "http://localhost:3000"]'
+      
+      # Security (CHANGE SECRET_KEY in production!)
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production-use-openssl-rand-hex-32}
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 43200
+      
+      # CORS
+      CORS_ORIGINS: '["http://localhost:5173", "http://localhost:3000", "http://localhost:5174"]'
+      
+      # Canvas Config
+      CANVAS_INSTANCE_URL: ${CANVAS_INSTANCE_URL:-https://usflearn.instructure.com}
+      CANVAS_SESSION_COOKIE: ${CANVAS_SESSION_COOKIE:-}
+      
+      # AI API Keys
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - ./app:/app/app
+      - ./seed_data.py:/app/seed_data.py
+      - ./import_canvas_data.py:/app/import_canvas_data.py
+      - ./create_test_user.py:/app/create_test_user.py
+      - ./canvas_data.json:/app/canvas_data.json
+      - ./flashcards_groq.json:/app/flashcards_groq.json
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - canvas_network
 
 volumes:
   postgres_data:
+
+networks:
+  canvas_network:
+    driver: bridge
+
 
 
 

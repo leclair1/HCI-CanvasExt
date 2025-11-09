@@ -118,3 +118,5 @@ async def clear_chat_history(course_id: str, db: Session = Depends(get_db)):
 
 
 
+
+
