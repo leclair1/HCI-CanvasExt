@@ -50,12 +50,15 @@ cp config.env.template .env
 Edit `.env` and add your credentials:
 
 ```env
-# Get Canvas session cookie from browser (F12 → Application → Cookies → canvas_session)
+# Canvas Session Cookie (NOT an API key - get from browser cookies)
+# Login to Canvas → F12 → Application → Cookies → canvas_session
 CANVAS_SESSION_COOKIE=your_canvas_session_cookie_here
 
-# Get Groq API key from https://console.groq.com/keys
+# Groq AI API Key (free at https://console.groq.com/keys)
 GROQ_API_KEY=your_groq_api_key_here
 ```
+
+**Note**: You can also provide the Canvas session cookie during signup instead of in `.env`
 
 ### 2. Start Backend (Docker)
 
@@ -78,9 +81,15 @@ Frontend runs at: http://localhost:5173
 
 ### 4. Create Account & Login
 
-1. Open http://localhost:5173
-2. Sign up with email/password
-3. Your Canvas courses will sync automatically!
+1. Open http://localhost:5173 (or http://localhost:3000 depending on your setup)
+2. Click "Sign Up"
+3. Fill in your details:
+   - Name and email
+   - **Canvas Session Cookie** (optional, but required for flashcard generation)
+   - Password
+4. Your Canvas courses will sync automatically!
+
+**Tip**: If you skip adding the Canvas session during signup, you'll need to sign up again with a fresh session later to enable flashcard generation.
 
 ## 🔧 Configuration
 
@@ -98,12 +107,42 @@ All sensitive config is in `backend/.env` (already in `.gitignore`):
 
 ### Getting Canvas Session Cookie
 
-1. Log into Canvas in your browser
-2. Press F12 to open DevTools
-3. Go to **Application** → **Cookies**
-4. Find `canvas_session` cookie
-5. Copy the entire value
-6. Paste into `backend/.env`
+**Important**: This is NOT an API key. It's a browser session cookie.
+
+1. **Login to Canvas** in your browser (Chrome, Firefox, Edge, etc.)
+2. **Open DevTools**: Press `F12` or right-click → Inspect
+3. Navigate to the **Application** tab (Chrome) or **Storage** tab (Firefox)
+4. In the sidebar, expand **Cookies** and click on your Canvas URL
+5. Find the cookie named `canvas_session`
+6. **Copy the entire value** (double-click to select all, then copy)
+7. **Paste into**:
+   - `backend/.env` file (for development/testing)
+   - **OR** the signup form when creating an account (for production)
+
+**Example cookie value**: `2bphp1Rq5npX_T_Nb-1P...` (long random string)
+
+### 🔄 Updating Your Canvas Session Cookie
+
+Canvas session cookies expire periodically. If flashcard generation fails or you see "Sign in to your account" errors, you need to update your session:
+
+**Steps to Update:**
+
+1. **Get Fresh Cookie**: Follow the steps above to get a new Canvas session cookie from your browser
+2. **Update `.env` File**:
+   ```bash
+   # Edit backend/.env and update this line:
+   CANVAS_SESSION_COOKIE=your_new_canvas_session_cookie_here
+   ```
+3. **Update Existing Users in Database**:
+   ```bash
+   cd backend
+   docker-compose restart backend
+   ```
+4. **Update Your Account**: 
+   - If you already have an account, the new session from `.env` will be used for new signups
+   - For existing users, contact admin or create a new account with the updated session
+
+**Note**: The `.env` file is used when **signing up new users**. If you're an existing user experiencing authentication issues, you may need to sign up again with a fresh Canvas session cookie during registration.
 
 ## 📚 Usage
 
@@ -229,9 +268,13 @@ docker-compose logs backend
 - Verify `GROQ_API_KEY` is set in `backend/.env`
 - Check Groq API rate limits (30 requests/minute on free tier)
 
-### Canvas data not loading
-- Verify `CANVAS_SESSION_COOKIE` is current and valid
-- Session cookies expire - get a fresh one from browser
+### Canvas data not loading / "Sign in to your account" errors
+- **Your Canvas session cookie has expired!**
+- Get a fresh cookie from your browser (see "Getting Canvas Session Cookie" section above)
+- Update `backend/.env` with the new cookie
+- Restart backend: `docker-compose restart backend`
+- **For existing users**: You may need to create a new account with the fresh session cookie
+- Session cookies typically expire after a few days/weeks
 
 ### Database errors
 ```bash

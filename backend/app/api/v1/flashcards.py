@@ -22,6 +22,7 @@ class GenerateFlashcardsRequest(BaseModel):
     """Request model for generating flashcards"""
     module_id: int = Field(..., description="Module ID to generate flashcards from")
     num_cards: int = Field(15, ge=10, le=30, description="Number of flashcards to generate")
+    file_urls: List[str] = Field(default=[], description="Optional: Specific file URLs to process")
 
 
 class GenerateFlashcardsResponse(BaseModel):
@@ -155,34 +156,7 @@ async def generate_flashcards_from_module(
     
     print(f"\n=== Generating flashcards for module: {module.name} ===")
     
-    # Try to load pre-generated flashcards
-    import json
-    from pathlib import Path
-    flashcards_file = Path("/app/flashcards_groq.json")
-    
-    if flashcards_file.exists():
-        with open(flashcards_file, 'r', encoding='utf-8') as f:
-            all_flashcards = json.load(f)
-        
-        # Filter flashcards by module name
-        module_flashcards = [
-            card for card in all_flashcards 
-            if card.get('module', '').lower() in module.name.lower() or 
-               module.name.lower() in card.get('module', '').lower()
-        ]
-        
-        print(f"Found {len(module_flashcards)} pre-generated flashcards for this module")
-        
-        if module_flashcards:
-            # Return the requested number of flashcards
-            flashcards = module_flashcards[:request.num_cards]
-            return GenerateFlashcardsResponse(
-                flashcards=flashcards,
-                module_name=module.name,
-                count=len(flashcards)
-            )
-    
-    # Fallback: Try to generate from scratch
+    # Generate flashcards from module content using AI
     # Get user's Canvas session cookie
     if not current_user.canvas_session_cookie:
         # Generate generic flashcards if no session cookie
@@ -199,18 +173,27 @@ async def generate_flashcards_from_module(
     items_processed = 0
     
     print(f"\n=== Processing module: {module.name} ===")
-    print(f"Module has {len(module.items)} items")
     
-    for item in module.items[:10]:  # Try up to 10 items
-        item_url = item.get('url', '')
-        item_name = item.get('name', '')
-        
-        print(f"Processing item: {item_name}")
-        
-        if item_url and '.pdf' in item_name.lower():  # Prioritize PDFs
-            print(f"  Extracting PDF: {item_name}")
+    # Parse items if they're stored as JSON string
+    import json as json_lib
+    items = module.items
+    if isinstance(items, str):
+        items = json_lib.loads(items)
+    elif items is None:
+        items = []
+    
+    print(f"Module has {len(items)} items")
+    
+    # If specific file URLs were provided, use only those
+    if request.file_urls and len(request.file_urls) > 0:
+        print(f"Using {len(request.file_urls)} user-selected files")
+        for file_url in request.file_urls:
+            # Find the item name from the module items
+            item_name = next((item.get('title', 'Unknown') for item in items if item.get('url') == file_url), 'Unknown')
+            
+            print(f"Processing selected file: {item_name}")
             text = extract_text_from_url(
-                item_url,
+                file_url,
                 session_cookie,
                 current_user.canvas_instance_url or "https://usflearn.instructure.com"
             )
@@ -220,21 +203,42 @@ async def generate_flashcards_from_module(
                 items_processed += 1
             else:
                 print(f"  Failed to extract text or too short")
-    
-    # If not enough from PDFs, try HTML pages
-    if len(all_text) < 500 and items_processed < 2:
-        for item in module.items[:10]:
+    else:
+        # Default behavior: process all items
+        for item in items[:10]:  # Try up to 10 items
             item_url = item.get('url', '')
-            item_name = item.get('name', '')
+            item_name = item.get('title', '') or item.get('name', '')
             
-            if item_url and '.pdf' not in item_name.lower():
+            print(f"Processing item: {item_name}")
+            
+            if item_url and '.pdf' in item_name.lower():  # Prioritize PDFs
+                print(f"  Extracting PDF: {item_name}")
                 text = extract_text_from_url(
                     item_url,
                     session_cookie,
                     current_user.canvas_instance_url or "https://usflearn.instructure.com"
                 )
-                if text:
+                if text and len(text) > 50:
+                    print(f"  Extracted {len(text)} characters")
                     all_text += text + "\n\n"
+                    items_processed += 1
+                else:
+                    print(f"  Failed to extract text or too short")
+        
+        # If not enough from PDFs, try HTML pages
+        if len(all_text) < 500 and items_processed < 2:
+            for item in items[:10]:
+                item_url = item.get('url', '')
+                item_name = item.get('title', '') or item.get('name', '')
+                
+                if item_url and '.pdf' not in item_name.lower():
+                    text = extract_text_from_url(
+                        item_url,
+                        session_cookie,
+                        current_user.canvas_instance_url or "https://usflearn.instructure.com"
+                    )
+                    if text:
+                        all_text += text + "\n\n"
     
     print(f"Total text extracted: {len(all_text)} characters from {items_processed} items")
     print(f"Content preview: {all_text[:300]}...")

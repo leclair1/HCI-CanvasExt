@@ -9,6 +9,8 @@ interface FlashcardStudyProps {
   onGenerateNewDeck: () => void;
   onNavigateToAITutor: () => void;
   flashcards?: any[];
+  isRegenerating?: boolean;
+  onSwitchToQuiz?: () => void; // New prop for switching to quiz with same files
 }
 
 interface Flashcard {
@@ -36,7 +38,9 @@ export default function FlashcardStudy({
   onSaveDeck, 
   onGenerateNewDeck, 
   onNavigateToAITutor,
-  flashcards: providedFlashcards
+  flashcards: providedFlashcards,
+  isRegenerating = false,
+  onSwitchToQuiz
 }: FlashcardStudyProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -113,10 +117,22 @@ export default function FlashcardStudy({
               </button>
               <button
                 onClick={onGenerateNewDeck}
-                className="h-9 px-4 rounded-lg bg-gradient-to-r from-accent/10 to-primary/10 hover:from-accent/20 hover:to-primary/20 border border-accent/30 text-foreground transition-all text-sm flex items-center gap-2"
+                disabled={isRegenerating}
+                className={`h-9 px-4 rounded-lg bg-gradient-to-r from-accent/10 to-primary/10 hover:from-accent/20 hover:to-primary/20 border border-accent/30 text-foreground transition-all text-sm flex items-center gap-2 ${
+                  isRegenerating ? "opacity-50 cursor-not-allowed" : ""
+                }`}
               >
-                <Sparkles className="size-4" />
-                Generate New
+                {isRegenerating ? (
+                  <>
+                    <RotateCw className="size-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="size-4" />
+                    Generate New
+                  </>
+                )}
               </button>
               
               {/* AI Tutor Badge */}
@@ -134,22 +150,13 @@ export default function FlashcardStudy({
         {/* Mode Tabs */}
         <div className="bg-muted rounded-2xl p-1 mb-16 inline-flex">
           <button
-            onClick={() => setMode("flashcards")}
-            className={`px-8 h-7 rounded-xl text-sm transition-all ${
-              mode === "flashcards"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+            className="px-8 h-7 rounded-xl text-sm bg-card text-foreground shadow-sm transition-all"
           >
             Flashcards
           </button>
           <button
-            onClick={onStartQuiz}
-            className={`px-8 h-7 rounded-xl text-sm transition-all ${
-              mode === "quiz"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+            onClick={onSwitchToQuiz || onStartQuiz}
+            className="px-8 h-7 rounded-xl text-sm text-muted-foreground hover:text-foreground transition-all"
           >
             Practice Quiz
           </button>
