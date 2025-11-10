@@ -10,13 +10,14 @@ import QuizResults from "./components/QuizResults";
 import Planner from "./components/Planner";
 import Insights from "./components/Insights";
 import AITutor from "./components/AITutor";
+import AITutorSelection from "./components/AITutorSelection";
 import SavedFlashcards from "./components/SavedFlashcards";
 import Login from "./components/Login";
 import Signup from "./components/Signup";
 import ProfileSettings from "./components/ProfileSettings";
 import "./styles/globals.css";
 
-type View = "login" | "signup" | "dashboard" | "course-details" | "course-selection" | "flashcard-selection" | "flashcard-study" | "quiz" | "quiz-results" | "planner" | "insights" | "ai-tutor" | "saved-flashcards" | "profile";
+type View = "login" | "signup" | "dashboard" | "course-details" | "course-selection" | "flashcard-selection" | "flashcard-study" | "quiz" | "quiz-results" | "planner" | "insights" | "ai-tutor-selection" | "ai-tutor" | "saved-flashcards" | "profile";
 
 interface QuizAnswer {
   question: string;
@@ -63,6 +64,10 @@ export default function App() {
   const [currentFlashcardCount, setCurrentFlashcardCount] = useState<number>(15);
   const [currentSelectedFiles, setCurrentSelectedFiles] = useState<string[]>([]);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [aiTutorModuleId, setAiTutorModuleId] = useState<number | null>(null);
+  const [aiTutorSelectedFiles, setAiTutorSelectedFiles] = useState<string[]>([]);
+  const [aiTutorCourseName, setAiTutorCourseName] = useState<string>("");
+  const [navigationIntent, setNavigationIntent] = useState<"flashcards" | "ai-tutor" | null>(null);
 
   const toggleDarkMode = () => {
     const newMode = !isDarkMode;
@@ -86,8 +91,12 @@ export default function App() {
   };
 
   const handleNavigate = (view: "dashboard" | "flashcard-selection" | "planner" | "insights" | "ai-tutor" | "profile") => {
-    // When navigating to flashcards from navbar, show course selection first
+    // When navigating to flashcards or AI tutor from navbar, show course selection first
     if (view === "flashcard-selection") {
+      setNavigationIntent("flashcards");
+      setCurrentView("course-selection");
+    } else if (view === "ai-tutor") {
+      setNavigationIntent("ai-tutor");
       setCurrentView("course-selection");
     } else {
       setCurrentView(view);
@@ -96,7 +105,15 @@ export default function App() {
 
   const handleCourseSelect = (courseId: number, courseCode: string, courseName: string) => {
     setSelectedCourse({ id: courseId, code: courseCode, name: courseName });
-    setCurrentView("flashcard-selection");
+    
+    // Navigate based on intent
+    if (navigationIntent === "ai-tutor") {
+      setCurrentView("ai-tutor-selection");
+      setNavigationIntent(null); // Reset intent
+    } else {
+      setCurrentView("flashcard-selection");
+      setNavigationIntent(null); // Reset intent
+    }
   };
 
   const handleSaveDeck = (cards: Flashcard[]) => {
@@ -305,7 +322,7 @@ export default function App() {
               setCurrentView("flashcard-selection");
             }
           }}
-          onNavigateToAITutor={() => setCurrentView("ai-tutor")}
+          onNavigateToAITutor={() => setCurrentView("ai-tutor-selection")}
           courseId={selectedCourse.id}
           courseCode={selectedCourse.code}
           courseName={selectedCourse.name}
@@ -351,7 +368,7 @@ export default function App() {
           }}
           onViewSavedDecks={() => setCurrentView("saved-flashcards")}
           onViewSavedQuizzes={() => setCurrentView("saved-flashcards")} // Reuse same view for now
-          onNavigateToAITutor={() => setCurrentView("ai-tutor")}
+          onNavigateToAITutor={() => setCurrentView("ai-tutor-selection")}
           savedDecksCount={savedDecks.length}
           savedQuizzesCount={savedQuizzes.length}
           courseId={selectedCourse.id}
@@ -365,7 +382,7 @@ export default function App() {
           onStartQuiz={() => setCurrentView("quiz")}
           onSaveDeck={handleSaveDeck}
           onGenerateNewDeck={handleGenerateNewDeck}
-          onNavigateToAITutor={() => setCurrentView("ai-tutor")}
+          onNavigateToAITutor={() => setCurrentView("ai-tutor-selection")}
           flashcards={generatedFlashcards}
           isRegenerating={isRegenerating}
           onSwitchToQuiz={handleSwitchToQuiz}
@@ -386,7 +403,7 @@ export default function App() {
               setCurrentView("quiz");
             }
           }}
-          onNavigateToAITutor={() => setCurrentView("ai-tutor")}
+          onNavigateToAITutor={() => setCurrentView("ai-tutor-selection")}
         />
       )}
       {currentView === "quiz" && (
@@ -394,7 +411,7 @@ export default function App() {
           onBack={() => setCurrentView("flashcard-selection")}
           onComplete={handleQuizComplete}
           onStartStudying={() => setCurrentView("flashcard-study")}
-          onNavigateToAITutor={() => setCurrentView("ai-tutor")}
+          onNavigateToAITutor={() => setCurrentView("ai-tutor-selection")}
           onSaveQuiz={handleSaveQuiz}
           onGenerateNewQuiz={handleGenerateNewQuiz}
           quizQuestions={generatedQuizQuestions}
@@ -409,7 +426,7 @@ export default function App() {
           answers={quizAnswers}
           onRetake={handleRetakeQuiz}
           onBack={() => setCurrentView("flashcard-selection")}
-          onNavigateToAITutor={() => setCurrentView("ai-tutor")}
+          onNavigateToAITutor={() => setCurrentView("ai-tutor-selection")}
         />
       )}
       {currentView === "planner" && (
@@ -418,8 +435,27 @@ export default function App() {
       {currentView === "insights" && (
         <Insights />
       )}
-      {currentView === "ai-tutor" && (
-        <AITutor onBack={() => setCurrentView("dashboard")} />
+      {currentView === "ai-tutor-selection" && (
+        <AITutorSelection
+          onBack={() => setCurrentView("dashboard")}
+          onStartChat={(moduleId, selectedFiles, courseName) => {
+            setAiTutorModuleId(moduleId);
+            setAiTutorSelectedFiles(selectedFiles);
+            setAiTutorCourseName(courseName);
+            setCurrentView("ai-tutor");
+          }}
+          courseId={selectedCourse.id}
+          courseCode={selectedCourse.code}
+          courseName={selectedCourse.name}
+        />
+      )}
+      {currentView === "ai-tutor" && aiTutorModuleId && (
+        <AITutor 
+          onBack={() => setCurrentView("ai-tutor-selection")}
+          moduleId={aiTutorModuleId}
+          selectedFiles={aiTutorSelectedFiles}
+          courseName={aiTutorCourseName}
+        />
       )}
       {currentView === "profile" && (
         <ProfileSettings

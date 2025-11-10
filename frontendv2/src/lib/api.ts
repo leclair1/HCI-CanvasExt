@@ -356,4 +356,76 @@ export const flashcardsAPI = {
   }
 };
 
+// Chat API for AI Tutor
+export interface ChatResponse {
+  message: string;
+  role: string;
+  references?: string[];
+}
+
+export const chatAPI = {
+  async sendMessage(moduleId: number, message: string, selectedFiles: string[]): Promise<ChatResponse> {
+    const token = tokenManager.getToken();
+    if (!token) {
+      throw new Error("Not authenticated");
+    }
+
+    const response = await fetch(`${API_BASE_URL}/chat`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        module_id: moduleId,
+        message,
+        file_urls: selectedFiles
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to send message");
+    }
+
+    return response.json();
+  },
+
+  async getChatHistory(moduleId: number, limit: number = 50): Promise<any[]> {
+    const token = tokenManager.getToken();
+    if (!token) {
+      throw new Error("Not authenticated");
+    }
+
+    const response = await fetch(`${API_BASE_URL}/chat/history/${moduleId}?limit=${limit}`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch chat history");
+    }
+
+    return response.json();
+  },
+
+  async clearHistory(moduleId: number): Promise<void> {
+    const token = tokenManager.getToken();
+    if (!token) {
+      throw new Error("Not authenticated");
+    }
+
+    const response = await fetch(`${API_BASE_URL}/chat/history/${moduleId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to clear chat history");
+    }
+  }
+};
+
 

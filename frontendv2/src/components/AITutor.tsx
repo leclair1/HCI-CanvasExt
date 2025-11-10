@@ -1,22 +1,92 @@
-import { useState } from "react";
-import { ChevronLeft, Bot } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { ChevronLeft, Bot, Send, Loader2, FileText } from "lucide-react";
 
 interface AITutorProps {
   onBack: () => void;
+  moduleId: number;
+  selectedFiles: string[];
+  courseName: string;
+}
+
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+  references?: string[];
 }
 
 type Mode = "chat" | "active-recall";
 
-export default function AITutor({ onBack }: AITutorProps) {
+export default function AITutor({ onBack, moduleId, selectedFiles, courseName }: AITutorProps) {
   const [mode, setMode] = useState<Mode>("chat");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputMessage, setInputMessage] = useState("");
+  const [sending, setSending] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [userAnswer, setUserAnswer] = useState("");
   const [gradingMode, setGradingMode] = useState<"easy" | "balanced" | "tough">("easy");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const questions = [
     "Explain the difference between a stack and a queue, including their key principles.",
     "What is recursion and how does it work?"
   ];
+
+  // Initialize with welcome message
+  useEffect(() => {
+    setMessages([{
+      role: "assistant",
+      content: `Ready. I have ${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''} loaded from ${courseName}. Ask your question.`,
+      references: []
+    }]);
+  }, []);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() || sending) return;
+
+    const userMessage = inputMessage.trim();
+    setInputMessage("");
+    setSending(true);
+
+    // Add user message
+    const newMessages: Message[] = [...messages, { role: "user", content: userMessage }];
+    setMessages(newMessages);
+
+    try {
+      // Import API dynamically
+      const { chatAPI } = await import("../lib/api");
+      
+      // Send to backend with selected files
+      const response = await chatAPI.sendMessage(moduleId, userMessage, selectedFiles);
+      
+      // Add AI response
+      setMessages([...newMessages, {
+        role: "assistant",
+        content: response.message,
+        references: response.references || []
+      }]);
+    } catch (error: any) {
+      console.error("Failed to send message:", error);
+      setMessages([...newMessages, {
+        role: "assistant",
+        content: "Sorry, I encountered an error processing your question. Please try again.",
+        references: []
+      }]);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -31,13 +101,19 @@ export default function AITutor({ onBack }: AITutorProps) {
             <span className="text-sm">Back to Selection</span>
           </button>
 
-          <div className="flex items-center gap-4">
-            <div className="size-12 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Bot className="size-6 text-primary" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="size-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Bot className="size-6 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-foreground">AI Tutor</h2>
+                <p className="text-muted-foreground text-sm">{courseName}</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-foreground">AI Tutor</h2>
-              <p className="text-muted-foreground text-sm">CS 101 - Introduction to Computer Science</p>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <FileText className="size-4" />
+              <span>{selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''}</span>
             </div>
           </div>
         </div>
@@ -68,38 +144,36 @@ export default function AITutor({ onBack }: AITutorProps) {
             {/* Chat Messages */}
             <div className="bg-card rounded-2xl p-6 border border-border mb-4 min-h-[500px] max-h-[500px] overflow-y-auto">
               <div className="space-y-4">
-                {/* AI Message */}
-                <div className="flex justify-start">
-                  <div className="bg-muted rounded-lg p-3 max-w-md">
-                    <p className="text-sm text-foreground">
-                      Hello! I'm your AI tutor for CS 101. How can I help you today?
-                    </p>
+                {messages.map((message, index) => (
+                  <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <div className={`rounded-lg p-3 ${
+                      message.role === "user"
+                        ? "bg-primary max-w-md"
+                        : "bg-muted max-w-lg"
+                    }`}>
+                      <p className={`text-sm whitespace-pre-wrap ${
+                        message.role === "user" ? "text-primary-foreground" : "text-foreground"
+                      }`}>
+                        {message.content}
+                      </p>
+                      {message.references && message.references.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-border/50">
+                          <p className="text-xs text-muted-foreground">
+                            📚 Referenced: {message.references.join(", ")}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-
-                {/* User Message */}
-                <div className="flex justify-end">
-                  <div className="bg-primary rounded-lg p-3 max-w-md">
-                    <p className="text-sm text-primary-foreground">
-                      Can you explain the difference between a stack and a queue?
-                    </p>
+                ))}
+                {sending && (
+                  <div className="flex justify-start">
+                    <div className="bg-muted rounded-lg p-3">
+                      <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                    </div>
                   </div>
-                </div>
-
-                {/* AI Response */}
-                <div className="flex justify-start">
-                  <div className="bg-muted rounded-lg p-3 max-w-lg">
-                    <p className="text-sm text-foreground mb-2">
-                      Great question! A stack follows the Last-In-First-Out (LIFO) principle, meaning the last element added is the first one removed. Think of it like a stack of plates - you add and remove from the top.
-                    </p>
-                    <p className="text-sm text-foreground mb-2">
-                      A queue follows the First-In-First-Out (FIFO) principle, where the first element added is the first one removed. Think of a line at a store - the first person in line is the first to be served.
-                    </p>
-                    <p className="text-sm text-foreground">
-                      Would you like me to explain any specific operations for these data structures?
-                    </p>
-                  </div>
-                </div>
+                )}
+                <div ref={messagesEndRef} />
               </div>
             </div>
 
@@ -108,10 +182,19 @@ export default function AITutor({ onBack }: AITutorProps) {
               <input
                 type="text"
                 placeholder="Ask a question..."
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                disabled={sending}
                 className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
               />
-              <button className="h-8 px-4 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm">
-                Send
+              <button
+                onClick={handleSendMessage}
+                disabled={sending || !inputMessage.trim()}
+                className="h-8 px-4 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                <span>Send</span>
               </button>
             </div>
           </div>

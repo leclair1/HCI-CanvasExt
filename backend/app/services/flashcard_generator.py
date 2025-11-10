@@ -9,6 +9,7 @@ from typing import List, Dict
 from bs4 import BeautifulSoup
 from PyPDF2 import PdfReader
 import io
+from groq import Groq
 from app.core.config import settings
 
 # Groq API Configuration
@@ -339,3 +340,58 @@ JSON array:"""
     except Exception as e:
         raise ValueError(f"Quiz generation failed: {e}")
 
+
+def generate_chat_response_with_groq(question: str, context: str, module_name: str) -> str:
+    """
+    Generate an AI tutor chat response using course material context (RAG).
+    
+    Args:
+        question: Student's question
+        context: Extracted text from course materials (PDFs, documents)
+        module_name: Name of the module for reference
+        
+    Returns:
+        AI-generated response based on the context
+    """
+    if not settings.GROQ_API_KEY:
+        raise ValueError("GROQ_API_KEY not configured")
+    
+    client = Groq(api_key=settings.GROQ_API_KEY)
+    
+    prompt = f"""You are a direct, no-nonsense AI tutor for "{module_name}".
+
+Question: {question}
+
+Course material context:
+{context}
+
+Instructions:
+- Answer ONLY what was asked - no introductions, no pleasantries
+- Be concise and to the point
+- Use the provided course materials to answer
+- If the answer isn't in the materials, say so briefly
+- No "Would you like me to..." or "Let me know if..." endings
+- Get straight to the answer
+
+Answer:"""
+    
+    try:
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            model=MODEL,  # Use same model as flashcards (llama-3.1-8b-instant)
+            temperature=0.7,
+            max_tokens=1000,
+            top_p=1,
+            stream=False
+        )
+        
+        response = chat_completion.choices[0].message.content
+        return response.strip()
+        
+    except Exception as e:
+        raise ValueError(f"Chat response generation failed: {e}")
