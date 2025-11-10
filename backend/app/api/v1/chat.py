@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 from app.db.database import get_db
 from app.models.chat_message import ChatMessage as ChatMessageModel
 from app.models.user import User
@@ -7,7 +8,12 @@ from app.models.module import Module
 from app.schemas.chat import ChatMessage, ChatRequest, ChatResponse
 from app.core.config import settings
 from app.core.encryption import decrypt_data
-from app.services.flashcard_generator import extract_text_from_url, generate_chat_response_with_groq
+from app.services.flashcard_generator import (
+    extract_text_from_url, 
+    generate_chat_response_with_groq,
+    generate_active_recall_question_with_groq,
+    grade_active_recall_answer_with_groq
+)
 from app.api.v1.auth import get_current_user
 import random
 
@@ -166,6 +172,166 @@ async def clear_chat_history(course_id: str, db: Session = Depends(get_db)):
     ).delete()
     db.commit()
     return None
+
+
+# Active Recall Endpoints
+
+class ActiveRecallQuestionRequest(BaseModel):
+    """Request to generate an active recall question"""
+    module_id: int
+    file_urls: list[str] = []
+
+
+class ActiveRecallQuestionResponse(BaseModel):
+    """Response with generated question"""
+    question: str
+
+
+class ActiveRecallGradeRequest(BaseModel):
+    """Request to grade an answer"""
+    question: str
+    user_answer: str
+    module_id: int
+    file_urls: list[str] = []
+    difficulty: str = "balanced"  # easy, balanced, tough
+
+
+class ActiveRecallGradeResponse(BaseModel):
+    """Response with grading results"""
+    score: int
+    feedback: str
+    correct_answer: str
+    passed: bool
+
+
+@router.post("/active-recall/question", response_model=ActiveRecallQuestionResponse)
+async def generate_question(
+    request: ActiveRecallQuestionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Generate an active recall question from selected course materials"""
+    print(f"\n=== Active Recall Question Generation ===")
+    print(f"Module ID: {request.module_id}")
+    print(f"Selected Files: {len(request.file_urls)}")
+    
+    # Get module
+    module = db.query(Module).filter(Module.id == request.module_id).first()
+    if not module:
+        raise HTTPException(status_code=404, detail="Module not found")
+    
+    # Get session cookie
+    if not current_user.canvas_session_cookie:
+        raise HTTPException(status_code=400, detail="No Canvas session cookie available")
+    
+    session_cookie = decrypt_data(current_user.canvas_session_cookie)
+    
+    # Extract text from selected files
+    context_text = ""
+    
+    if request.file_urls and len(request.file_urls) > 0:
+        print(f"Extracting text from {len(request.file_urls)} files...")
+        
+        for file_url in request.file_urls[:3]:  # Limit to 3 files
+            try:
+                text = extract_text_from_url(
+                    file_url,
+                    session_cookie,
+                    current_user.canvas_instance_url or settings.CANVAS_INSTANCE_URL
+                )
+                
+                if text and len(text) > 50:
+                    context_text += text + "\n\n"
+                    print(f"  ✓ Extracted {len(text)} characters")
+            except Exception as e:
+                print(f"  ✗ Failed to extract: {e}")
+                continue
+    
+    if not context_text or len(context_text) < 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not extract enough content from files to generate question"
+        )
+    
+    # Generate question
+    print(f"Generating question from {len(context_text)} characters...")
+    
+    try:
+        question = generate_active_recall_question_with_groq(
+            context=context_text[:10000],  # Limit context
+            module_name=module.name
+        )
+        print(f"✓ Question generated: {question[:80]}...")
+        
+        return ActiveRecallQuestionResponse(question=question)
+        
+    except Exception as e:
+        print(f"✗ Question generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/active-recall/grade", response_model=ActiveRecallGradeResponse)
+async def grade_answer(
+    request: ActiveRecallGradeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Grade a user's active recall answer"""
+    print(f"\n=== Active Recall Grading ===")
+    print(f"Question: {request.question[:80]}...")
+    print(f"Answer length: {len(request.user_answer)} characters")
+    print(f"Difficulty: {request.difficulty}")
+    
+    # Get module
+    module = db.query(Module).filter(Module.id == request.module_id).first()
+    if not module:
+        raise HTTPException(status_code=404, detail="Module not found")
+    
+    # Get session cookie
+    if not current_user.canvas_session_cookie:
+        raise HTTPException(status_code=400, detail="No Canvas session cookie available")
+    
+    session_cookie = decrypt_data(current_user.canvas_session_cookie)
+    
+    # Extract text from selected files (same as question generation)
+    context_text = ""
+    
+    if request.file_urls and len(request.file_urls) > 0:
+        for file_url in request.file_urls[:3]:
+            try:
+                text = extract_text_from_url(
+                    file_url,
+                    session_cookie,
+                    current_user.canvas_instance_url or settings.CANVAS_INSTANCE_URL
+                )
+                if text and len(text) > 50:
+                    context_text += text + "\n\n"
+            except:
+                continue
+    
+    if not context_text or len(context_text) < 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not extract enough content from files to grade answer"
+        )
+    
+    # Grade the answer
+    print(f"Grading with {len(context_text)} characters of context...")
+    
+    try:
+        result = grade_active_recall_answer_with_groq(
+            question=request.question,
+            user_answer=request.user_answer,
+            context=context_text[:10000],
+            difficulty=request.difficulty
+        )
+        print(f"✓ Grading complete: {result['score']}/100")
+        
+        return ActiveRecallGradeResponse(**result)
+        
+    except Exception as e:
+        print(f"✗ Grading failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 

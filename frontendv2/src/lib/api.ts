@@ -425,6 +425,66 @@ export const chatAPI = {
     if (!response.ok) {
       throw new Error("Failed to clear chat history");
     }
+  },
+
+  // Active Recall
+  async generateQuestion(moduleId: number, fileUrls: string[]): Promise<{ question: string }> {
+    const token = tokenManager.getToken();
+    if (!token) {
+      throw new Error("Not authenticated");
+    }
+
+    const response = await fetch(`${API_BASE_URL}/chat/active-recall/question`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        module_id: moduleId,
+        file_urls: fileUrls
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to generate question");
+    }
+
+    return response.json();
+  },
+
+  async gradeAnswer(
+    question: string, 
+    userAnswer: string, 
+    moduleId: number, 
+    fileUrls: string[], 
+    difficulty: string
+  ): Promise<{ score: number; feedback: string; correct_answer: string; passed: boolean }> {
+    const token = tokenManager.getToken();
+    if (!token) {
+      throw new Error("Not authenticated");
+    }
+
+    const response = await fetch(`${API_BASE_URL}/chat/active-recall/grade`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        question,
+        user_answer: userAnswer,
+        module_id: moduleId,
+        file_urls: fileUrls,
+        difficulty
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to grade answer");
+    }
+
+    return response.json();
   }
 };
 

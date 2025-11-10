@@ -16,6 +16,13 @@ interface Message {
 
 type Mode = "chat" | "active-recall";
 
+interface GradingResult {
+  score: number;
+  feedback: string;
+  correct_answer: string;
+  passed: boolean;
+}
+
 export default function AITutor({ onBack, moduleId, selectedFiles, courseName }: AITutorProps) {
   const [mode, setMode] = useState<Mode>("chat");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -23,13 +30,12 @@ export default function AITutor({ onBack, moduleId, selectedFiles, courseName }:
   const [sending, setSending] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [userAnswer, setUserAnswer] = useState("");
-  const [gradingMode, setGradingMode] = useState<"easy" | "balanced" | "tough">("easy");
+  const [gradingMode, setGradingMode] = useState<"easy" | "balanced" | "tough">("balanced");
+  const [questions, setQuestions] = useState<string[]>([]);
+  const [loadingQuestion, setLoadingQuestion] = useState(false);
+  const [gradingResult, setGradingResult] = useState<GradingResult | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const questions = [
-    "Explain the difference between a stack and a queue, including their key principles.",
-    "What is recursion and how does it work?"
-  ];
 
   // Initialize with welcome message
   useEffect(() => {
@@ -85,6 +91,84 @@ export default function AITutor({ onBack, moduleId, selectedFiles, courseName }:
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
+    }
+  };
+
+  // Generate a new active recall question
+  const generateNewQuestion = async () => {
+    setLoadingQuestion(true);
+    setGradingResult(null);
+    setUserAnswer("");
+
+    try {
+      const { chatAPI } = await import("../lib/api");
+      const result = await chatAPI.generateQuestion(moduleId, selectedFiles);
+      
+      setQuestions(prev => [...prev, result.question]);
+      console.log("Question generated:", result.question);
+    } catch (error: any) {
+      console.error("Failed to generate question:", error);
+      alert("Failed to generate question. Please try again.");
+    } finally {
+      setLoadingQuestion(false);
+    }
+  };
+
+  // Generate initial questions when switching to active recall mode
+  useEffect(() => {
+    if (mode === "active-recall" && questions.length === 0 && !loadingQuestion) {
+      generateNewQuestion();
+    }
+  }, [mode]);
+
+  // Submit answer for grading
+  const handleSubmitAnswer = async () => {
+    if (!userAnswer.trim()) {
+      alert("Please provide an answer before submitting.");
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const { chatAPI } = await import("../lib/api");
+      const result = await chatAPI.gradeAnswer(
+        questions[currentQuestion],
+        userAnswer,
+        moduleId,
+        selectedFiles,
+        gradingMode
+      );
+      
+      setGradingResult(result);
+      console.log("Grading result:", result);
+    } catch (error: any) {
+      console.error("Failed to grade answer:", error);
+      alert("Failed to grade answer. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Move to next question
+  const handleNextQuestion = () => {
+    if (currentQuestion < questions.length - 1) {
+      setCurrentQuestion(currentQuestion + 1);
+      setUserAnswer("");
+      setGradingResult(null);
+    } else {
+      // Generate a new question
+      generateNewQuestion();
+      setCurrentQuestion(questions.length); // Will be updated when question is added
+    }
+  };
+
+  // Move to previous question
+  const handlePreviousQuestion = () => {
+    if (currentQuestion > 0) {
+      setCurrentQuestion(currentQuestion - 1);
+      setUserAnswer("");
+      setGradingResult(null);
     }
   };
 
@@ -215,7 +299,7 @@ export default function AITutor({ onBack, moduleId, selectedFiles, courseName }:
                       : "bg-card border border-border text-foreground hover:bg-accent/20"
                   }`}
                 >
-                  Easy Grader
+                  Easy
                 </button>
                 <button
                   onClick={() => setGradingMode("balanced")}
@@ -235,65 +319,134 @@ export default function AITutor({ onBack, moduleId, selectedFiles, courseName }:
                       : "bg-card border border-border text-foreground hover:bg-accent/20"
                   }`}
                 >
-                  Tough Grader
+                  Tough
                 </button>
               </div>
             </div>
 
-            {/* Progress */}
-            <div className="mb-6">
-              <p className="text-sm text-muted-foreground mb-2">
-                Question {currentQuestion + 1} of {questions.length}
-              </p>
-              <div className="h-2 bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-green-400 rounded-full transition-all duration-300"
-                  style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}
-                />
+            {loadingQuestion ? (
+              <div className="text-center py-12">
+                <Loader2 className="size-8 animate-spin mx-auto mb-3 text-primary" />
+                <p className="text-muted-foreground">Generating question from your course materials...</p>
               </div>
-            </div>
-
-            {/* Question Card */}
-            <div className="bg-card rounded-2xl p-8 border border-border mb-6">
-              <span className="px-3 py-1 rounded-lg bg-muted text-foreground text-xs mb-4 inline-block">
-                Question
-              </span>
-              <h3 className="text-foreground mb-8">{questions[currentQuestion]}</h3>
-
-              <div className="mb-4">
-                <p className="text-sm text-muted-foreground mb-2">Your Answer:</p>
-                <textarea
-                  value={userAnswer}
-                  onChange={(e) => setUserAnswer(e.target.value)}
-                  placeholder="Type your answer here..."
-                  className="w-full h-[120px] bg-muted/50 rounded-lg p-3 text-sm text-foreground placeholder:text-muted-foreground border border-border outline-none resize-none"
-                />
+            ) : questions.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground">No questions yet. Click "New Question" to start.</p>
               </div>
+            ) : (
+              <>
+                {/* Progress */}
+                <div className="mb-6">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Question {currentQuestion + 1} of {questions.length}
+                  </p>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary rounded-full transition-all duration-300"
+                      style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}
+                    />
+                  </div>
+                </div>
 
-              <button className="h-9 px-6 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm">
-                Submit Answer
-              </button>
-            </div>
+                {/* Question Card */}
+                <div className="bg-card rounded-2xl p-8 border border-border mb-6">
+                  <span className="px-3 py-1 rounded-lg bg-muted text-foreground text-xs mb-4 inline-block">
+                    Question
+                  </span>
+                  <h3 className="text-foreground mb-8">{questions[currentQuestion]}</h3>
 
-            {/* Navigation */}
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => setCurrentQuestion(Math.max(0, currentQuestion - 1))}
-                disabled={currentQuestion === 0}
-                className="flex items-center gap-2 h-9 px-4 rounded-lg bg-card hover:bg-accent/20 border border-border text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-              >
-                <ChevronLeft className="size-4" />
-                <span>Previous</span>
-              </button>
+                  <div className="mb-4">
+                    <p className="text-sm text-muted-foreground mb-2">Your Answer:</p>
+                    <textarea
+                      value={userAnswer}
+                      onChange={(e) => setUserAnswer(e.target.value)}
+                      placeholder="Type your answer here..."
+                      disabled={!!gradingResult}
+                      className="w-full h-[120px] bg-muted/50 rounded-lg p-3 text-sm text-foreground placeholder:text-muted-foreground border border-border outline-none resize-none disabled:opacity-60"
+                    />
+                  </div>
 
-              <button
-                onClick={() => setCurrentQuestion(Math.min(questions.length - 1, currentQuestion + 1))}
-                disabled={currentQuestion === questions.length - 1}
-                className="h-9 px-4 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-              >
-                Next
-              </button>
-            </div>
+                  {!gradingResult ? (
+                    <button
+                      onClick={handleSubmitAnswer}
+                      disabled={submitting || !userAnswer.trim()}
+                      className="h-9 px-6 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {submitting && <Loader2 className="size-4 animate-spin" />}
+                      Submit Answer
+                    </button>
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Score */}
+                      <div className={`rounded-lg p-4 ${
+                        gradingResult.passed ? 'bg-green-500/10 border border-green-500/30' : 'bg-orange-500/10 border border-orange-500/30'
+                      }`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-foreground">Score</span>
+                          <span className={`text-2xl font-bold ${
+                            gradingResult.passed ? 'text-green-500' : 'text-orange-500'
+                          }`}>
+                            {gradingResult.score}/100
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Feedback */}
+                      <div className="bg-muted/50 rounded-lg p-4">
+                        <p className="text-xs text-muted-foreground mb-1">Feedback:</p>
+                        <p className="text-sm text-foreground">{gradingResult.feedback}</p>
+                      </div>
+
+                      {/* Correct Answer */}
+                      <div className="bg-muted/50 rounded-lg p-4">
+                        <p className="text-xs text-muted-foreground mb-1">Complete Answer:</p>
+                        <p className="text-sm text-foreground">{gradingResult.correct_answer}</p>
+                      </div>
+
+                      {/* Try Again or Next */}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setGradingResult(null);
+                            setUserAnswer("");
+                          }}
+                          className="flex-1 h-9 px-4 rounded-lg bg-card border border-border text-foreground hover:bg-accent/20 transition-colors text-sm"
+                        >
+                          Try Again
+                        </button>
+                        <button
+                          onClick={handleNextQuestion}
+                          className="flex-1 h-9 px-4 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm"
+                        >
+                          Next Question
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Navigation */}
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={handlePreviousQuestion}
+                    disabled={currentQuestion === 0}
+                    className="flex items-center gap-2 h-9 px-4 rounded-lg bg-card hover:bg-accent/20 border border-border text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  >
+                    <ChevronLeft className="size-4" />
+                    <span>Previous</span>
+                  </button>
+
+                  <button
+                    onClick={generateNewQuestion}
+                    disabled={loadingQuestion}
+                    className="h-9 px-4 rounded-lg bg-accent text-accent-foreground hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center gap-2"
+                  >
+                    {loadingQuestion && <Loader2 className="size-4 animate-spin" />}
+                    New Question
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </main>
