@@ -14,9 +14,9 @@ class ChatMessage(ChatMessageBase):
         from_attributes = True
 
 class ChatRequest(BaseModel):
-    course_id: str
+    module_id: int
     message: str
-    context: list[str] | None = None  # Optional context from course materials
+    file_urls: list[str] = []  # URLs of selected files for RAG context
 
 class ChatResponse(BaseModel):
     message: str
