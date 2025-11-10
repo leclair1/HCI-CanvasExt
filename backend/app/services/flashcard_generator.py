@@ -395,3 +395,150 @@ Answer:"""
         
     except Exception as e:
         raise ValueError(f"Chat response generation failed: {e}")
+
+
+def generate_active_recall_question_with_groq(context: str, module_name: str) -> str:
+    """
+    Generate an active recall question based on course material context.
+    
+    Args:
+        context: Extracted text from course materials
+        module_name: Name of the module for reference
+        
+    Returns:
+        A challenging question based on the context
+    """
+    if not settings.GROQ_API_KEY:
+        raise ValueError("GROQ_API_KEY not configured")
+    
+    client = Groq(api_key=settings.GROQ_API_KEY)
+    
+    prompt = f"""Based on this course material from "{module_name}", generate ONE challenging question that tests understanding:
+
+{context}
+
+Generate a question that:
+- Tests deep understanding, not just memorization
+- Requires explanation or analysis
+- Is specific to the provided material
+- Has a clear, answerable scope
+
+Return ONLY the question, nothing else."""
+    
+    try:
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            model=MODEL,
+            temperature=0.8,  # Slightly higher for variety
+            max_tokens=200,
+            top_p=1,
+            stream=False
+        )
+        
+        question = chat_completion.choices[0].message.content
+        return question.strip()
+        
+    except Exception as e:
+        raise ValueError(f"Question generation failed: {e}")
+
+
+def grade_active_recall_answer_with_groq(
+    question: str, 
+    user_answer: str, 
+    context: str, 
+    difficulty: str
+) -> Dict[str, any]:
+    """
+    Grade a user's answer using AI based on course material and difficulty level.
+    
+    Args:
+        question: The question asked
+        user_answer: Student's answer
+        context: Course material context
+        difficulty: Grading mode - "easy", "balanced", or "tough"
+        
+    Returns:
+        Dict with score, feedback, and correct answer
+    """
+    if not settings.GROQ_API_KEY:
+        raise ValueError("GROQ_API_KEY not configured")
+    
+    client = Groq(api_key=settings.GROQ_API_KEY)
+    
+    # Adjust grading criteria based on difficulty
+    if difficulty == "easy":
+        criteria = """- Award points for partial understanding
+- Accept answers that capture the main idea even if missing details
+- Be encouraging and lenient
+- 70%+ for reasonable attempts"""
+    elif difficulty == "balanced":
+        criteria = """- Require accurate understanding of key concepts
+- Expect clear explanations
+- Deduct points for significant errors or omissions
+- 80%+ for solid answers"""
+    else:  # tough
+        criteria = """- Demand precise, thorough explanations
+- Expect specific examples and complete coverage
+- Deduct points for minor inaccuracies
+- 90%+ only for excellent answers"""
+    
+    prompt = f"""Grade this student answer using {difficulty} grading standards.
+
+Question: {question}
+
+Course Material Context:
+{context}
+
+Student's Answer:
+{user_answer}
+
+Grading Criteria ({difficulty} mode):
+{criteria}
+
+Provide your grading in this EXACT JSON format:
+{{
+  "score": <number 0-100>,
+  "feedback": "<brief direct feedback on their answer>",
+  "correct_answer": "<what a complete answer should include>",
+  "passed": <true if score >= 70, false otherwise>
+}}
+
+Be direct and specific. No introductions."""
+    
+    try:
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            model=MODEL,
+            temperature=0.3,  # Lower for more consistent grading
+            max_tokens=500,
+            top_p=1,
+            stream=False
+        )
+        
+        response_text = chat_completion.choices[0].message.content.strip()
+        
+        # Parse JSON response
+        # Try to extract JSON if wrapped in markdown code blocks
+        if "```json" in response_text:
+            response_text = response_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in response_text:
+            response_text = response_text.split("```")[1].split("```")[0].strip()
+        
+        result = json.loads(response_text)
+        return result
+        
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse grading response. Content:\n{response_text}")
+        raise ValueError(f"Failed to parse grading response: {e}")
+    except Exception as e:
+        raise ValueError(f"Answer grading failed: {e}")
