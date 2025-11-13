@@ -37,6 +37,13 @@ class Token(BaseModel):
     token_type: str
     user: UserResponse
 
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserResponse
+    canvas_session_valid: Optional[bool] = None
+    has_canvas_session: Optional[bool] = None
+
 class TokenData(BaseModel):
     email: Optional[str] = None
 

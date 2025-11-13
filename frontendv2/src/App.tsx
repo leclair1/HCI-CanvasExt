@@ -15,6 +15,8 @@ import SavedFlashcards from "./components/SavedFlashcards";
 import Login from "./components/Login";
 import Signup from "./components/Signup";
 import ProfileSettings from "./components/ProfileSettings";
+import CanvasSessionPrompt from "./components/CanvasSessionPrompt";
+import { tokenManager } from "./lib/api";
 import "./styles/globals.css";
 
 type View = "login" | "signup" | "dashboard" | "course-details" | "course-selection" | "flashcard-selection" | "flashcard-study" | "quiz" | "quiz-results" | "planner" | "insights" | "ai-tutor-selection" | "ai-tutor" | "saved-flashcards" | "profile";
@@ -68,6 +70,7 @@ export default function App() {
   const [aiTutorSelectedFiles, setAiTutorSelectedFiles] = useState<string[]>([]);
   const [aiTutorCourseName, setAiTutorCourseName] = useState<string>("");
   const [navigationIntent, setNavigationIntent] = useState<"flashcards" | "ai-tutor" | null>(null);
+  const [showCanvasSessionPrompt, setShowCanvasSessionPrompt] = useState(false);
 
   const toggleDarkMode = () => {
     const newMode = !isDarkMode;
@@ -260,7 +263,20 @@ export default function App() {
     }
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
+    // Check Canvas session status from login response
+    const canvasSessionValid = sessionStorage.getItem("canvas_session_valid") === "true";
+    const hasCanvasSession = sessionStorage.getItem("has_canvas_session") === "true";
+    
+    // If session is invalid but user has a session stored, show prompt
+    if (!canvasSessionValid && hasCanvasSession) {
+      setShowCanvasSessionPrompt(true);
+    }
+    
+    // Clear session storage
+    sessionStorage.removeItem("canvas_session_valid");
+    sessionStorage.removeItem("has_canvas_session");
+    
     setCurrentView("dashboard");
   };
 
@@ -269,7 +285,13 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    tokenManager.clear();
     setCurrentView("login");
+  };
+
+  const handleCanvasSessionSuccess = () => {
+    // Canvas session updated successfully
+    console.log("Canvas session updated successfully");
   };
 
   // Show login/signup without navbar
@@ -294,6 +316,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
+      {/* Canvas Session Prompt Modal */}
+      <CanvasSessionPrompt
+        isOpen={showCanvasSessionPrompt}
+        onClose={() => setShowCanvasSessionPrompt(false)}
+        onSuccess={handleCanvasSessionSuccess}
+      />
+
       {/* Persistent Navbar */}
       <Navbar 
         currentView={currentView} 

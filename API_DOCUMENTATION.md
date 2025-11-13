@@ -162,7 +162,7 @@ Create a new user account.
 ---
 
 #### `POST /auth/login`
-Authenticate existing user.
+Authenticate existing user and validate Canvas session.
 
 **Authentication:** None required
 
@@ -174,10 +174,115 @@ Authenticate existing user.
 }
 ```
 
-**Response:** `200 OK` (same format as signup)
+**Response:** `200 OK`
+```json
+{
+  "access_token": "eyJhbGc...",
+  "token_type": "bearer",
+  "user": {
+    "id": 1,
+    "first_name": "John",
+    "last_name": "Doe",
+    "email": "john@example.com",
+    "canvas_user_id": null,
+    "study_streak_days": 0,
+    "dark_mode": false,
+    "email_notifications": true,
+    "push_notifications": true,
+    "study_reminders": true,
+    "deadline_alerts": true,
+    "created_at": "2025-11-10T15:00:00"
+  },
+  "canvas_session_valid": false,
+  "has_canvas_session": true
+}
+```
+
+**New Fields:**
+- `canvas_session_valid`: Boolean indicating if user's Canvas session cookie is still valid
+- `has_canvas_session`: Boolean indicating if user has a Canvas session cookie stored
+
+**Process Flow:**
+1. Validates email and password
+2. Checks if user has Canvas session cookie stored
+3. If present, attempts to validate by fetching courses from Canvas
+4. Returns authentication token plus Canvas session status
 
 **Errors:**
 - `401 Unauthorized` - Invalid email or password
+
+---
+
+#### `POST /auth/validate-canvas-session`
+Validate the current user's Canvas session cookie.
+
+**Authentication:** Required
+
+**Request Body:** None
+
+**Response:** `200 OK`
+```json
+{
+  "is_valid": true,
+  "has_session": true,
+  "message": "Canvas session is valid"
+}
+```
+
+**Response Fields:**
+- `is_valid`: Whether the Canvas session cookie is valid
+- `has_session`: Whether the user has a Canvas session cookie stored
+- `message`: Human-readable status message
+
+**Use Cases:**
+- Check if user needs to update Canvas session before making Canvas API calls
+- Validate session periodically in the frontend
+- Determine if Canvas features should be enabled
+
+---
+
+#### `POST /auth/update-canvas-session`
+Update the user's Canvas session cookie and re-sync courses.
+
+**Authentication:** Required
+
+**Request Body:**
+```json
+{
+  "canvas_session_cookie": "new_session_cookie_value_here",
+  "canvas_instance_url": "https://usflearn.instructure.com"
+}
+```
+
+**Validation:**
+- `canvas_session_cookie`: Required, min length 1
+- `canvas_instance_url`: Optional, defaults to "https://usflearn.instructure.com"
+
+**Response:** `200 OK`
+```json
+{
+  "success": true,
+  "message": "Canvas session updated successfully",
+  "courses_synced": 5,
+  "modules_synced": 42
+}
+```
+
+**Process Flow:**
+1. Validates new Canvas session cookie by attempting to fetch courses
+2. If invalid, returns `400 Bad Request`
+3. If valid, encrypts and stores new session cookie
+4. Updates Canvas instance URL
+5. Automatically re-syncs all active courses and modules
+6. Returns sync results
+
+**Errors:**
+- `400 Bad Request` - Invalid Canvas session cookie or validation failed
+- `401 Unauthorized` - User not authenticated
+
+**Use Case:**
+- Called when Canvas session expires and user provides new cookie
+- Automatically triggered by frontend modal when session validation fails
 
 ---
 
@@ -1475,6 +1580,46 @@ Scrape courses using session cookie (web scraping).
 **Filtering Logic:**
 Skips courses containing:
 - "template", "sandbox", "test", "demo"
+
+---
+
+#### `POST /canvas/validate-session`
+Validate a Canvas session cookie without authentication.
+
+**Authentication:** None required
+
+**Request Body:**
+```json
+{
+  "canvas_url": "https://usflearn.instructure.com",
+  "session_cookie": "session_cookie_value_to_validate"
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "is_valid": true,
+  "message": "Canvas session is valid"
+}
+```
+
+**Validation Process:**
+1. Creates CanvasScraper with provided session cookie
+2. Attempts to fetch courses from Canvas
+3. If successful and courses found, session is valid
+4. Returns validation result with message
+
+**Response Fields:**
+- `is_valid`: Boolean indicating if session cookie works
+- `message`: Human-readable validation result
+
+**Use Cases:**
+- Validate session cookie before signup
+- Pre-validate session before updating user's session
+- Check if session has expired before making Canvas requests
+
+**Note:** This endpoint does not require authentication and can be used by anyone to validate their Canvas session cookie before providing it to the system
 - "avoiding plagiarism", "career readiness"
 - Other non-academic keywords
 

@@ -5,6 +5,7 @@ A multi-user web application that integrates with Canvas LMS to help students st
 ## 🎯 Features
 
 - **Canvas Integration**: Automatically scrapes and syncs course materials, modules, and assignments
+- **Automatic Session Validation**: System automatically checks and prompts for Canvas session updates when expired
 - **AI Flashcard Generation**: Uses Groq AI to generate high-quality flashcards from course content
 - **Multi-User Support**: Each user has their own courses, modules, and study materials
 - **Secure Authentication**: JWT-based auth with encrypted Canvas session storage
@@ -121,28 +122,41 @@ All sensitive config is in `backend/.env` (already in `.gitignore`):
 
 **Example cookie value**: `2bphp1Rq5npX_T_Nb-1P...` (long random string)
 
-### 🔄 Updating Your Canvas Session Cookie
+### 🔄 Canvas Session Validation (Automatic)
 
-Canvas session cookies expire periodically. If flashcard generation fails or you see "Sign in to your account" errors, you need to update your session:
+**NEW FEATURE**: The system now automatically validates your Canvas session when you log in!
 
-**Steps to Update:**
+#### How It Works
 
-1. **Get Fresh Cookie**: Follow the steps above to get a new Canvas session cookie from your browser
-2. **Update `.env` File**:
-   ```bash
-   # Edit backend/.env and update this line:
-   CANVAS_SESSION_COOKIE=your_new_canvas_session_cookie_here
-   ```
-3. **Update Existing Users in Database**:
-   ```bash
-   cd backend
-   docker-compose restart backend
-   ```
-4. **Update Your Account**: 
-   - If you already have an account, the new session from `.env` will be used for new signups
-   - For existing users, contact admin or create a new account with the updated session
+When you log in, the system:
+1. **Checks** if your Canvas session cookie is still valid
+2. **Alerts** you if it has expired
+3. **Prompts** you to provide a new session cookie (with easy-to-follow instructions)
+4. **Updates** your session and re-syncs your courses automatically
 
-**Note**: The `.env` file is used when **signing up new users**. If you're an existing user experiencing authentication issues, you may need to sign up again with a fresh Canvas session cookie during registration.
+#### What You'll See
+
+If your Canvas session expires, you'll see a modal prompt after login with:
+- **Clear instructions** on how to get a new Canvas session cookie from your browser
+- **Step-by-step guide** with screenshots descriptions
+- **Validation** to ensure the new session works before saving
+- **Option to skip** if you don't need Canvas features immediately
+
+#### Updating Your Canvas Session
+
+**Option 1: Automatic Prompt (Recommended)**
+- Simply log in as usual
+- If your session is expired, the prompt appears automatically
+- Follow the instructions to update your session
+- Done! Your courses will sync automatically
+
+**Option 2: Manual Update via .env (For Development)**
+1. Get a fresh Canvas session cookie from your browser (follow instructions above)
+2. Edit `backend/.env` and update `CANVAS_SESSION_COOKIE`
+3. Restart backend: `docker-compose restart backend`
+4. Log in and the system will detect the change
+
+**Note**: The automatic validation feature ensures you're always prompted to update your session when needed, without having to manually check or recreate your account.
 
 ## 📚 Usage
 
@@ -270,10 +284,10 @@ docker-compose logs backend
 
 ### Canvas data not loading / "Sign in to your account" errors
 - **Your Canvas session cookie has expired!**
-- Get a fresh cookie from your browser (see "Getting Canvas Session Cookie" section above)
-- Update `backend/.env` with the new cookie
-- Restart backend: `docker-compose restart backend`
-- **For existing users**: You may need to create a new account with the fresh session cookie
+- **Solution**: Simply log out and log back in - the system will automatically prompt you to update your Canvas session
+- Follow the in-app instructions to get and paste a new Canvas session cookie
+- The system will validate and update your session automatically
+- Your courses will re-sync immediately after updating
 - Session cookies typically expire after a few days/weeks
 
 ### Database errors

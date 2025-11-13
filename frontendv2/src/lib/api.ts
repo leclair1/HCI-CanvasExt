@@ -33,6 +33,8 @@ export interface AuthResponse {
     deadline_alerts: boolean;
     created_at: string;
   };
+  canvas_session_valid?: boolean;
+  has_canvas_session?: boolean;
 }
 
 // Auth API
@@ -89,6 +91,42 @@ export const authAPI = {
 
     if (!response.ok) {
       throw new Error("Failed to get user info");
+    }
+
+    return response.json();
+  },
+
+  async validateCanvasSession(token: string): Promise<{ is_valid: boolean; has_session: boolean; message: string }> {
+    const response = await fetch(`${API_BASE_URL}/auth/validate-canvas-session`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to validate Canvas session");
+    }
+
+    return response.json();
+  },
+
+  async updateCanvasSession(token: string, sessionCookie: string, canvasUrl?: string): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/auth/update-canvas-session`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        canvas_session_cookie: sessionCookie,
+        canvas_instance_url: canvasUrl || "https://usflearn.instructure.com",
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: "Failed to update Canvas session" }));
+      throw new Error(error.detail || "Failed to update Canvas session");
     }
 
     return response.json();

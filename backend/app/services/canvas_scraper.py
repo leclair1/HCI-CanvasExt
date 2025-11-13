@@ -43,7 +43,7 @@ class CanvasScraper:
         return courses
     
     def filter_active_courses(self, all_courses: Dict[str, str]) -> Dict[str, str]:
-        """Filter to get only active semester courses"""
+        """Filter to get only current semester courses (Fall 2025 / F25)"""
         active_courses = {}
         
         keywords_to_skip = [
@@ -59,10 +59,8 @@ class CanvasScraper:
             if any(skip in name_lower for skip in keywords_to_skip):
                 continue
             
-            # Keep current semester courses (F25 Fall 2025, F24 Fall 2024, etc.)
-            if ('f25' in name_lower or 'f24' in name_lower or 
-                'fall 2025' in name_lower or 'fall 2024' in name_lower or
-                's25' in name_lower or 'spring 2025' in name_lower):
+            # Keep ONLY current semester courses (F25 or Fall 2025)
+            if 'f25' in name_lower or 'fall 2025' in name_lower:
                 active_courses[cid] = name
         
         return active_courses

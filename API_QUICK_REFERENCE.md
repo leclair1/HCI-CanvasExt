@@ -28,10 +28,26 @@ POST /auth/signup
 }
 → { access_token, token_type, user }
 
-// Login
+// Login (with Canvas session validation)
 POST /auth/login
 { email, password }
-→ { access_token, token_type, user }
+→ { 
+  access_token, token_type, user,
+  canvas_session_valid: boolean,
+  has_canvas_session: boolean
+}
+
+// Validate Canvas session
+POST /auth/validate-canvas-session
+→ { is_valid: boolean, has_session: boolean, message: string }
+
+// Update Canvas session
+POST /auth/update-canvas-session
+{
+  canvas_session_cookie: string,
+  canvas_instance_url?: string
+}
+→ { success, message, courses_synced, modules_synced }
 
 // All other requests
 Headers: { Authorization: "Bearer {token}" }
@@ -184,6 +200,11 @@ POST /canvas/sync
 POST /canvas/scrape-courses
 { canvas_url, session_cookie, user_id }
 → { success, courses_imported, modules_imported, message }
+
+// Validate session (public)
+POST /canvas/validate-session
+{ canvas_url, session_cookie }
+→ { is_valid: boolean, message: string }
 ```
 
 ---
@@ -454,6 +475,7 @@ Active Recall Mode:
 2. Check user_id matches logged-in user
 3. Verify JWT token is valid
 4. Check CORS settings if frontend can't connect
+5. **Canvas session expired?** Log out and log back in - system will prompt for new session
 
 **Database issues?**
 1. Check postgres is running: `docker ps | grep postgres`
@@ -467,8 +489,10 @@ Active Recall Mode:
 | Endpoint | Method | Auth | Purpose |
 |----------|--------|------|---------|
 | `/auth/signup` | POST | ❌ | Create account |
-| `/auth/login` | POST | ❌ | Get JWT token |
+| `/auth/login` | POST | ❌ | Get JWT token + session status |
 | `/auth/me` | GET | ✅ | Get user info |
+| `/auth/validate-canvas-session` | POST | ✅ | Check Canvas session |
+| `/auth/update-canvas-session` | POST | ✅ | Update Canvas session |
 | `/courses` | GET | ✅ | List courses |
 | `/modules/course/{id}` | GET | ✅ | List modules |
 | `/flashcards/generate` | POST | ✅ | AI flashcards |
@@ -480,10 +504,11 @@ Active Recall Mode:
 | `/dashboard` | GET | ✅ | Dashboard data |
 | `/canvas/sync` | POST | ❌ | Sync Canvas |
 | `/canvas/scrape-courses` | POST | ❌ | Scrape courses |
+| `/canvas/validate-session` | POST | ❌ | Validate session (public) |
 | `/study-sessions` | GET/POST | ✅ | Track studying |
 | `/profile` | GET/PUT | ✅ | User profile |
 
-**Total Endpoints:** 50+
+**Total Endpoints:** 53+
 
 ---
 
@@ -607,7 +632,7 @@ result = requests.post(
 2. **Check logs** for detailed error messages: `docker logs canvas_ext_backend -f`
 3. **Cache responses** to reduce API calls
 4. **Handle rate limits** from Groq (30/min free tier)
-5. **Refresh session cookie** when Canvas file access fails
+5. **Canvas session validation** happens automatically on login - system prompts when expired
 6. **Test with curl** before implementing in frontend
 
 ---

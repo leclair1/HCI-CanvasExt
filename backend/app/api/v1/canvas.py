@@ -151,7 +151,7 @@ async def sync_canvas_data(
         )
         
         # Create sync service
-        sync_service = CanvasSyncService(db=db, canvas_client=canvas)
+        sync_service = CanvasSyncService(db=db, canvas_client=canvas, user_id=user.id)
         
         # Perform sync
         try:
@@ -207,7 +207,7 @@ async def sync_courses_only(user_id: int, db: Session = Depends(get_db)):
             raise HTTPException(status_code=404, detail="User not found")
         
         canvas = CanvasClient(user.canvas_instance_url, user.canvas_access_token)
-        sync_service = CanvasSyncService(db=db, canvas_client=canvas)
+        sync_service = CanvasSyncService(db=db, canvas_client=canvas, user_id=user.id)
         
         try:
             count = await sync_service.sync_courses()
@@ -232,7 +232,7 @@ async def sync_assignments_only(
             raise HTTPException(status_code=404, detail="User not found")
         
         canvas = CanvasClient(user.canvas_instance_url, user.canvas_access_token)
-        sync_service = CanvasSyncService(db=db, canvas_client=canvas)
+        sync_service = CanvasSyncService(db=db, canvas_client=canvas, user_id=user.id)
         
         try:
             count = await sync_service.sync_assignments(course_id)
@@ -361,6 +361,55 @@ def scrape_canvas_courses(
         raise HTTPException(
             status_code=500,
             detail=f"Scraping failed: {str(e)}"
+        )
+
+
+class CanvasSessionValidateRequest(BaseModel):
+    """Request model for validating Canvas session"""
+    canvas_url: str = Field(..., description="Canvas instance URL")
+    session_cookie: str = Field(..., description="Canvas session cookie value")
+
+
+class CanvasSessionValidateResponse(BaseModel):
+    """Response model for session validation"""
+    is_valid: bool
+    message: str
+
+
+@router.post("/validate-session", response_model=CanvasSessionValidateResponse)
+def validate_canvas_session(
+    request: CanvasSessionValidateRequest
+):
+    """
+    Validate a Canvas session cookie by attempting to fetch courses
+    
+    Returns True if the session is valid, False otherwise
+    """
+    try:
+        # Create scraper with the session cookie
+        scraper = CanvasScraper(
+            base_url=request.canvas_url,
+            session_cookie=request.session_cookie
+        )
+        
+        # Try to get courses (this will fail if session is invalid)
+        courses = scraper.get_all_courses()
+        
+        # If we got here, session is valid
+        if courses:
+            return CanvasSessionValidateResponse(
+                is_valid=True,
+                message="Canvas session is valid"
+            )
+        else:
+            return CanvasSessionValidateResponse(
+                is_valid=False,
+                message="Canvas session appears invalid or no courses found"
+            )
+    except Exception as e:
+        return CanvasSessionValidateResponse(
+            is_valid=False,
+            message=f"Canvas session validation failed: {str(e)}"
         )
 
 

@@ -26,6 +26,14 @@ export default function Login({ onLogin, onSwitchToSignup }: LoginProps) {
       tokenManager.setToken(response.access_token);
       tokenManager.setUser(response.user);
       
+      // Store Canvas session status for App.tsx to handle
+      if (response.canvas_session_valid !== undefined) {
+        sessionStorage.setItem("canvas_session_valid", String(response.canvas_session_valid));
+      }
+      if (response.has_canvas_session !== undefined) {
+        sessionStorage.setItem("has_canvas_session", String(response.has_canvas_session));
+      }
+      
       // Success! Navigate to dashboard
       onLogin();
     } catch (err) {
