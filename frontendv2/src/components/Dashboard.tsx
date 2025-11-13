@@ -1,6 +1,6 @@
 import { Clock, BookOpen, Award, ChevronRight, Sparkles, Calendar } from "lucide-react";
 import { useEffect, useState } from "react";
-import { tokenManager, coursesAPI, Course } from "../lib/api";
+import { tokenManager, coursesAPI, assignmentsAPI, Course, Assignment } from "../lib/api";
 
 interface DashboardProps {
   onNavigateToCourse: (courseId: number, courseCode: string, courseName: string) => void;
@@ -11,6 +11,7 @@ export default function Dashboard({ onNavigateToCourse, onNavigateToPlanner }: D
   const [userName, setUserName] = useState("Student");
   const [studyStreak, setStudyStreak] = useState(0);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [upcomingAssignments, setUpcomingAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,19 +21,37 @@ export default function Dashboard({ onNavigateToCourse, onNavigateToPlanner }: D
       setStudyStreak(user.study_streak_days);
     }
     
-    // Fetch courses from API
-    fetchCourses();
+    // Fetch data from API
+    fetchData();
   }, []);
   
-  const fetchCourses = async () => {
+  const fetchData = async () => {
     try {
-      const data = await coursesAPI.getCourses(true); // Get active courses only
-      setCourses(data);
+      const [coursesData, assignmentsData] = await Promise.all([
+        coursesAPI.getCourses(true), // Get active courses only
+        assignmentsAPI.getUpcomingAssignments(3) // Get top 3 upcoming assignments
+      ]);
+      setCourses(coursesData);
+      setUpcomingAssignments(assignmentsData);
     } catch (error) {
-      console.error("Failed to fetch courses:", error);
+      console.error("Failed to fetch data:", error);
     } finally {
       setLoading(false);
     }
+  };
+  
+  // Helper to format assignment due date
+  const formatDueDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = date.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Tomorrow";
+    if (diffDays < 0) return "Overdue";
+    
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   return (
@@ -163,38 +182,62 @@ export default function Dashboard({ onNavigateToCourse, onNavigateToPlanner }: D
           <div className="bg-card rounded-2xl p-5 border border-border">
             <div className="flex items-center justify-between mb-8">
               <h3 className="text-foreground">Upcoming Assignments</h3>
-              <button className="px-3 h-8 rounded-lg hover:bg-accent/20 text-foreground transition-colors text-sm">
+              <button 
+                onClick={onNavigateToPlanner}
+                className="px-3 h-8 rounded-lg hover:bg-accent/20 text-foreground transition-colors text-sm"
+              >
                 View All
               </button>
             </div>
 
-            <div className="bg-accent/10 rounded-xl p-3">
-              <div className="flex gap-4">
-                <div className="size-8 rounded-lg bg-destructive/20 flex items-center justify-center shrink-0">
-                  <BookOpen className="size-4 text-destructive" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-start justify-between mb-1">
-                    <div>
-                      <h4 className="text-foreground mb-0.5">If-Else If-Else Statement Practice</h4>
-                      <p className="text-muted-foreground text-sm">CS 101</p>
+            {upcomingAssignments.length > 0 ? (
+              <div className="space-y-3">
+                {upcomingAssignments.map((assignment) => {
+                  const dueDate = formatDueDate(assignment.due_date);
+                  const isUrgent = dueDate === "Today" || dueDate === "Tomorrow";
+                  
+                  return (
+                    <div key={assignment.id} className="bg-accent/10 rounded-xl p-3">
+                      <div className="flex gap-4">
+                        <div className={`size-8 rounded-lg flex items-center justify-center shrink-0 ${
+                          isUrgent ? "bg-destructive/20" : "bg-primary/20"
+                        }`}>
+                          <BookOpen className={`size-4 ${
+                            isUrgent ? "text-destructive" : "text-primary"
+                          }`} />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-start justify-between mb-1">
+                            <div>
+                              <h4 className="text-foreground mb-0.5">{assignment.title}</h4>
+                              <p className="text-muted-foreground text-sm">{assignment.course}</p>
+                            </div>
+                            {isUrgent && (
+                              <span className="px-2.5 py-0.5 rounded-lg bg-destructive text-destructive-foreground text-xs">
+                                Urgent
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-4 mt-2">
+                            <div className="flex items-center gap-1 text-muted-foreground text-sm">
+                              <Clock className="size-3" />
+                              <span>{dueDate}</span>
+                            </div>
+                            <span className="px-2.5 py-0.5 rounded-lg border border-border text-foreground text-xs">
+                              {assignment.type}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <span className="px-2.5 py-0.5 rounded-lg bg-destructive text-destructive-foreground text-xs">
-                      Urgent
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-4 mt-2">
-                    <div className="flex items-center gap-1 text-muted-foreground text-sm">
-                      <Clock className="size-3" />
-                      <span>Oct 8, 2025</span>
-                    </div>
-                    <span className="px-2.5 py-0.5 rounded-lg border border-border text-foreground text-xs">
-                      Assignment
-                    </span>
-                  </div>
-                </div>
+                  );
+                })}
               </div>
-            </div>
+            ) : (
+              <div className="bg-accent/10 rounded-xl p-6 text-center">
+                <p className="text-muted-foreground text-sm">No upcoming assignments</p>
+              </div>
+            )}
           </div>
 
           {/* Right Sidebar - Personal Stats & Tasks */}

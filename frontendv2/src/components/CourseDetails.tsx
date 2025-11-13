@@ -1,7 +1,7 @@
 import { ChevronLeft, BookOpen, Clock, Calendar, FileText, Sparkles, ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
 import imgAiTutorLogo from "figma:asset/831d76f506f1dc02aaa78fa1316452543accee12.png";
-import { modulesAPI, Module } from "../lib/api";
+import { modulesAPI, assignmentsAPI, Module, Assignment } from "../lib/api";
 
 interface CourseDetailsProps {
   onBack: () => void;
@@ -21,47 +21,64 @@ export default function CourseDetails({
   courseName 
 }: CourseDetailsProps) {
   const [modules, setModules] = useState<Module[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
-    fetchModules();
+    fetchData();
   }, [courseId]);
   
-  const fetchModules = async () => {
+  const fetchData = async () => {
     try {
-      const data = await modulesAPI.getCourseModules(courseId);
-      setModules(data);
+      const [modulesData, assignmentsData] = await Promise.all([
+        modulesAPI.getCourseModules(courseId),
+        assignmentsAPI.getAssignments(courseId)
+      ]);
+      setModules(modulesData);
+      
+      // Filter to only upcoming assignments with specific due dates (not overdue)
+      const now = new Date();
+      const upcomingOnly = assignmentsData
+        .filter(a => {
+          if (a.submitted || a.status !== "pending") return false;
+          if (!a.due_date) return false; // Only assignments with specific due dates
+          const dueDate = new Date(a.due_date);
+          if (isNaN(dueDate.getTime())) return false; // Invalid date
+          return dueDate >= now;
+        })
+        .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+      
+      setAssignments(upcomingOnly);
     } catch (error) {
-      console.error("Failed to fetch modules:", error);
+      console.error("Failed to fetch course data:", error);
     } finally {
       setLoading(false);
     }
   };
   
-  // Mock data for assignments
-  const assignments = [
-    {
-      id: "1",
-      title: "If-Else If-Else Statement Practice",
-      type: "Assignment",
-      dueDate: "Today",
-      urgent: true
-    },
-    {
-      id: "2", 
-      title: "Arrays and Loops Homework",
-      type: "Homework",
-      dueDate: "Tomorrow",
-      urgent: false
-    },
-    {
-      id: "3",
-      title: "Midterm Project: Calculator App",
-      type: "Project",
-      dueDate: "Nov 15",
-      urgent: false
-    }
-  ];
+  // Helper to format assignment due date
+  const formatDueDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = date.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Tomorrow";
+    if (diffDays < 0) return "Overdue";
+    if (diffDays < 7) return `In ${diffDays} days`;
+    
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+  
+  // Helper to determine if assignment is urgent (due within 2 days)
+  const isUrgent = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = date.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays <= 2 && diffDays >= 0;
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -155,47 +172,58 @@ export default function CourseDetails({
           </div>
 
           <div className="space-y-3">
-            {assignments.map((assignment) => (
-              <div 
-                key={assignment.id}
-                className={`bg-card rounded-2xl p-5 border-2 transition-all ${
-                  assignment.urgent 
-                    ? "border-destructive/30 bg-destructive/5" 
-                    : "border-border hover:border-accent/50"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-4 flex-1">
-                    <div className={`size-10 rounded-lg flex items-center justify-center ${
-                      assignment.urgent 
-                        ? "bg-destructive/20" 
-                        : "bg-primary/20"
-                    }`}>
-                      <FileText className={`size-5 ${
-                        assignment.urgent 
-                          ? "text-destructive" 
-                          : "text-primary"
-                      }`} />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-foreground">{assignment.title}</h3>
-                        {assignment.urgent && (
-                          <span className="px-2 py-0.5 rounded-lg bg-destructive text-destructive-foreground text-xs">
-                            Urgent
-                          </span>
-                        )}
+            {assignments.length > 0 ? (
+              assignments.map((assignment) => {
+                const urgent = isUrgent(assignment.due_date);
+                const dueDate = formatDueDate(assignment.due_date);
+                
+                return (
+                  <div 
+                    key={assignment.id}
+                    className={`bg-card rounded-2xl p-5 border-2 transition-all ${
+                      urgent 
+                        ? "border-destructive/30 bg-destructive/5" 
+                        : "border-border hover:border-accent/50"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-4 flex-1">
+                        <div className={`size-10 rounded-lg flex items-center justify-center ${
+                          urgent 
+                            ? "bg-destructive/20" 
+                            : "bg-primary/20"
+                        }`}>
+                          <FileText className={`size-5 ${
+                            urgent 
+                              ? "text-destructive" 
+                              : "text-primary"
+                          }`} />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="text-foreground">{assignment.title}</h3>
+                            {urgent && (
+                              <span className="px-2 py-0.5 rounded-lg bg-destructive text-destructive-foreground text-xs">
+                                Urgent
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-muted-foreground text-sm">{assignment.type}</p>
+                        </div>
                       </div>
-                      <p className="text-muted-foreground text-sm">{assignment.type}</p>
+                      <div className="flex items-center gap-2 text-muted-foreground text-sm shrink-0">
+                        <Clock className="size-4" />
+                        <span>{dueDate}</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-muted-foreground text-sm shrink-0">
-                    <Clock className="size-4" />
-                    <span>Due {assignment.dueDate}</span>
-                  </div>
-                </div>
+                );
+              })
+            ) : (
+              <div className="bg-card rounded-2xl p-8 border border-border text-center">
+                <p className="text-muted-foreground">No upcoming assignments for this course</p>
               </div>
-            ))}
+            )}
           </div>
         </div>
 

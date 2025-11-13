@@ -11,10 +11,13 @@ from app.db.database import get_db
 from app.models.user import User
 from app.models.course import Course
 from app.models.module import Module
+from app.models.assignment import Assignment
 from app.schemas.auth import UserSignup, UserLogin, UserResponse, Token, TokenData, LoginResponse
 from app.core.config import settings
 from app.core.encryption import encrypt_data, decrypt_data
 from app.services.canvas_scraper import CanvasScraper
+from datetime import datetime as dt
+from dateutil import parser as date_parser
 
 router = APIRouter()
 
@@ -139,6 +142,37 @@ async def signup(user_data: UserSignup, db: Session = Depends(get_db)):
                         items=module_data.get('items', [])
                     )
                     db.add(module)
+                
+                # Import assignments
+                assignments_data = scraper.get_course_assignments(canvas_id)
+                for assign_data in assignments_data:
+                    try:
+                        # Parse due date
+                        due_date_str = assign_data.get('due_date', '')
+                        due_date = dt.utcnow()  # Default to now
+                        
+                        if due_date_str:
+                            try:
+                                # Try to parse the date string
+                                due_date = date_parser.parse(due_date_str)
+                            except:
+                                pass
+                        
+                        assignment = Assignment(
+                            user_id=new_user.id,
+                            course_id=course.id,
+                            title=assign_data.get('name', 'Unnamed Assignment'),
+                            course=code,
+                            due_date=due_date,
+                            type="Assignment",
+                            priority="medium",
+                            status="pending",
+                            submitted=False
+                        )
+                        db.add(assignment)
+                    except Exception as e:
+                        print(f"Failed to import assignment: {e}")
+                        continue
             
             db.commit()
             
@@ -157,9 +191,7 @@ async def signup(user_data: UserSignup, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=LoginResponse)
 async def login(user_data: UserLogin, db: Session = Depends(get_db)):
-    """Login user and validate Canvas session"""
-    from app.services.canvas_scraper import CanvasScraper
-    
+    """Login user, validate Canvas session, and sync assignments"""
     user = db.query(User).filter(User.email == user_data.email).first()
     
     if not user or not verify_password(user_data.password, user.password_hash):
@@ -169,7 +201,7 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Check Canvas session validity (non-blocking, quick check)
+    # Check Canvas session validity and sync assignments
     canvas_session_valid = False
     has_canvas_session = False
     
@@ -189,8 +221,74 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
                     timeout=3,  # 3 second timeout
                     allow_redirects=False
                 )
-                # If we get 200 or 302 (redirect to login means invalid)
                 canvas_session_valid = (response.status_code == 200)
+                
+                # If session is valid, sync assignments in background
+                if canvas_session_valid:
+                    try:
+                        scraper = CanvasScraper(
+                            base_url=canvas_url,
+                            session_cookie=session_cookie
+                        )
+                        
+                        # Get all user's courses
+                        user_courses = db.query(Course).filter(Course.user_id == user.id).all()
+                        
+                        for course in user_courses:
+                            if not course.canvas_id:
+                                continue
+                                
+                            # Fetch assignments from Canvas
+                            assignments_data = scraper.get_course_assignments(course.canvas_id)
+                            
+                            for assign_data in assignments_data:
+                                try:
+                                    # Parse due date
+                                    due_date_str = assign_data.get('due_date', '')
+                                    due_date = dt.utcnow()
+                                    
+                                    if due_date_str:
+                                        try:
+                                            due_date = date_parser.parse(due_date_str)
+                                        except:
+                                            pass
+                                    
+                                    title = assign_data.get('name', 'Unnamed Assignment')
+                                    
+                                    # Check if assignment already exists
+                                    existing_assignment = db.query(Assignment).filter(
+                                        Assignment.user_id == user.id,
+                                        Assignment.course_id == course.id,
+                                        Assignment.title == title
+                                    ).first()
+                                    
+                                    if existing_assignment:
+                                        # Update due date if changed
+                                        if existing_assignment.due_date != due_date:
+                                            existing_assignment.due_date = due_date
+                                    else:
+                                        # Create new assignment
+                                        assignment = Assignment(
+                                            user_id=user.id,
+                                            course_id=course.id,
+                                            title=title,
+                                            course=course.code,
+                                            due_date=due_date,
+                                            type="Assignment",
+                                            priority="medium",
+                                            status="pending",
+                                            submitted=False
+                                        )
+                                        db.add(assignment)
+                                except Exception as e:
+                                    print(f"Failed to sync assignment: {e}")
+                                    continue
+                        
+                        db.commit()
+                    except Exception as e:
+                        print(f"Assignment sync failed during login: {e}")
+                        db.rollback()
+                        
         except Exception as e:
             # Don't block login if Canvas check fails
             print(f"Canvas session check failed: {e}")
@@ -388,6 +486,45 @@ async def update_canvas_session(
                     )
                     db.add(module)
                     modules_synced += 1
+            
+            # Import assignments for this course
+            canvas_id = course_data['id']
+            assignments_data = scraper.get_course_assignments(canvas_id)
+            for assign_data in assignments_data:
+                try:
+                    # Parse due date
+                    due_date_str = assign_data.get('due_date', '')
+                    due_date = dt.utcnow()
+                    
+                    if due_date_str:
+                        try:
+                            due_date = date_parser.parse(due_date_str)
+                        except:
+                            pass
+                    
+                    # Check if assignment already exists
+                    existing_assignment = db.query(Assignment).filter(
+                        Assignment.user_id == current_user.id,
+                        Assignment.course_id == course.id,
+                        Assignment.title == assign_data.get('name', 'Unnamed Assignment')
+                    ).first()
+                    
+                    if not existing_assignment:
+                        assignment = Assignment(
+                            user_id=current_user.id,
+                            course_id=course.id,
+                            title=assign_data.get('name', 'Unnamed Assignment'),
+                            course=code,
+                            due_date=due_date,
+                            type="Assignment",
+                            priority="medium",
+                            status="pending",
+                            submitted=False
+                        )
+                        db.add(assignment)
+                except Exception as e:
+                    print(f"Failed to import assignment: {e}")
+                    continue
         
         db.commit()
         

@@ -11,16 +11,15 @@ router = APIRouter()
 
 @router.get("/", response_model=list[Course])
 def get_courses(
-    active_only: bool = True, 
-    db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user)
+    active_only: bool = True,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """Get all courses for the current user (active by default)"""
     query = db.query(CourseModel)
     
-    # Filter by current user if authenticated
-    if current_user:
-        query = query.filter(CourseModel.user_id == current_user.id)
+    # Always filter by current user for security
+    query = query.filter(CourseModel.user_id == current_user.id)
     
     if active_only:
         query = query.filter(CourseModel.is_active == 1)

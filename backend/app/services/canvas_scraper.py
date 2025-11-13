@@ -66,32 +66,43 @@ class CanvasScraper:
         return active_courses
     
     def get_course_assignments(self, course_id: str) -> List[Dict]:
-        """Get assignments for a course"""
-        url = urljoin(self.base_url, f"/courses/{course_id}/assignments")
+        """Get assignments for a course using Canvas API"""
+        # Canvas API endpoint for assignments (works with session cookie)
+        api_url = urljoin(
+            self.base_url, 
+            f"/api/v1/courses/{course_id}/assignment_groups"
+        )
+        
+        params = {
+            'include[]': 'assignments',
+            'exclude_assignment_submission_types[]': 'wiki_page',
+            'override_assignment_dates': 'false'
+        }
         
         try:
-            resp = self.session.get(url)
+            resp = self.session.get(api_url, params=params)
             resp.raise_for_status()
-            soup = BeautifulSoup(resp.text, 'html.parser')
+            
+            # Parse JSON response
+            data = resp.json()
             
             assignments = []
-            for item in soup.find_all("li", class_=re.compile("assignment")):
-                assignment = {}
-                
-                title_elem = item.find("a", class_=re.compile("title|ig-title"))
-                if title_elem:
-                    assignment['name'] = title_elem.get_text(strip=True)
-                    assignment['url'] = urljoin(self.base_url, title_elem.get('href', ''))
-                
-                date_elem = item.find(text=re.compile(r"Due:|due", re.I))
-                if date_elem:
-                    assignment['due_date'] = date_elem.strip()
-                
-                if assignment.get('name'):
-                    assignments.append(assignment)
+            
+            # Canvas returns assignment groups, each containing assignments
+            for group in data:
+                for assignment in group.get('assignments', []):
+                    assignments.append({
+                        'name': assignment.get('name', 'Unnamed Assignment'),
+                        'due_date': assignment.get('due_at'),
+                        'url': assignment.get('html_url'),
+                        'points': assignment.get('points_possible'),
+                        'submission_types': assignment.get('submission_types', []),
+                        'id': assignment.get('id')
+                    })
             
             return assignments
-        except:
+        except Exception as e:
+            print(f"Error fetching assignments for course {course_id}: {e}")
             return []
     
     def get_course_modules(self, course_id: str) -> List[Dict]:

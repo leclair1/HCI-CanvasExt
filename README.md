@@ -6,6 +6,7 @@ A multi-user web application that integrates with Canvas LMS to help students st
 
 - **Canvas Integration**: Automatically scrapes and syncs course materials, modules, and assignments
 - **Automatic Session Validation**: System automatically checks and prompts for Canvas session updates when expired
+- **Assignment Tracking**: Assignments automatically sync on every login and display in real-time
 - **AI Flashcard Generation**: Uses Groq AI to generate high-quality flashcards from course content
 - **Multi-User Support**: Each user has their own courses, modules, and study materials
 - **Secure Authentication**: JWT-based auth with encrypted Canvas session storage
@@ -158,27 +159,58 @@ If your Canvas session expires, you'll see a modal prompt after login with:
 
 **Note**: The automatic validation feature ensures you're always prompted to update your session when needed, without having to manually check or recreate your account.
 
+### 📝 Assignment Tracking
+
+**Automatic Assignment Syncing**
+
+The system automatically syncs your Canvas assignments:
+
+1. **On Signup**: When you create an account with a Canvas session cookie, all assignments from F25 courses are imported
+2. **On Every Login**: Assignments are re-synced from Canvas to keep your data current
+   - New assignments are added automatically
+   - Due dates are updated if changed in Canvas
+   - Existing assignments are matched by title to avoid duplicates
+
+**Where Assignments Appear:**
+- **Dashboard**: Shows top 3 upcoming assignments across all courses
+- **Course Details**: Shows all assignments for a specific course
+- **Automatic Urgency Detection**: Assignments due within 2 days are marked as "Urgent"
+
+**Filtering:**
+- Only **F25 (Fall 2025)** course assignments are synced
+- Only **pending/not submitted** assignments show as "upcoming"
+- Only assignments with **specific due dates** are displayed (no TBD/undefined dates)
+- **Overdue assignments are hidden**
+- Assignments are sorted by due date (soonest first = most urgent first)
+
+**Technical Details:**
+- Uses Canvas API (`/api/v1/courses/{id}/assignment_groups`) for reliable assignment fetching
+- Includes assignment name, due date, points, and submission types
+- Filters out assignments without due dates or with invalid dates
+
 ## 📚 Usage
 
 ### Study Flow
 
-1. **Dashboard**: View all your Canvas courses
-2. **Course Details**: See modules and materials
-3. **Generate Flashcards**: 
+1. **Dashboard**: View all your Canvas courses and upcoming assignments
+2. **Automatic Sync**: Every time you log in, assignments are automatically synced from Canvas
+3. **Course Details**: See modules and course-specific assignments
+4. **Generate Flashcards**: 
    - Select a module
    - Click "Generate Flashcards"
    - AI creates flashcards from PDFs and content
-4. **Study**: Review flashcards with flip animations
+5. **Study**: Review flashcards with flip animations
 
 ### API Endpoints
 
 Backend API documentation: http://localhost:8000/docs
 
 Key endpoints:
-- `POST /api/v1/auth/signup` - Create account
-- `POST /api/v1/auth/login` - Login
+- `POST /api/v1/auth/signup` - Create account (auto-syncs courses, modules, and assignments)
+- `POST /api/v1/auth/login` - Login (auto-syncs assignments from Canvas)
 - `GET /api/v1/courses` - Get user's courses
 - `GET /api/v1/modules/course/{id}` - Get course modules
+- `GET /api/v1/assignments?course_id={id}` - Get assignments (filtered by course)
 - `POST /api/v1/flashcards/generate` - Generate flashcards from module
 
 ## 🔒 Security

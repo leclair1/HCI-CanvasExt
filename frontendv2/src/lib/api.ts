@@ -203,7 +203,7 @@ export const coursesAPI = {
       throw new Error("Not authenticated");
     }
     
-    const url = `${API_BASE_URL}/courses${activeOnly ? '?active_only=true' : ''}`;
+    const url = `${API_BASE_URL}/courses/${activeOnly ? '?active_only=true' : ''}`;
     
     const response = await fetch(url, {
       headers: { 
@@ -237,6 +237,83 @@ export const coursesAPI = {
     }
 
     return response.json();
+  },
+};
+
+// Assignments API
+export interface Assignment {
+  id: number;
+  user_id: number;
+  title: string;
+  course: string;
+  course_id: number;
+  due_date: string;
+  type: string;
+  priority: string;
+  status: string;
+  submitted: boolean;
+  description?: string;
+  points?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export const assignmentsAPI = {
+  async getAssignments(courseId?: number): Promise<Assignment[]> {
+    const token = tokenManager.getToken();
+    if (!token) {
+      throw new Error("Not authenticated");
+    }
+    
+    const url = courseId 
+      ? `${API_BASE_URL}/assignments/?course_id=${courseId}` 
+      : `${API_BASE_URL}/assignments/`;
+    
+    const response = await fetch(url, {
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch assignments");
+    }
+
+    return response.json();
+  },
+
+  async getUpcomingAssignments(limit: number = 5): Promise<Assignment[]> {
+    const assignments = await this.getAssignments();
+    const now = new Date();
+    
+    // Filter to only pending/not submitted, has due date, AND not overdue
+    return assignments
+      .filter(a => {
+        if (a.submitted || a.status !== "pending") return false;
+        if (!a.due_date) return false; // Only assignments with specific due dates
+        const dueDate = new Date(a.due_date);
+        if (isNaN(dueDate.getTime())) return false; // Invalid date
+        return dueDate >= now; // Only future assignments
+      })
+      .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
+      .slice(0, limit);
+  },
+  
+  async getAllUpcomingAssignments(): Promise<Assignment[]> {
+    const assignments = await this.getAssignments();
+    const now = new Date();
+    
+    // Filter to only pending/not submitted, has due date, AND not overdue
+    return assignments
+      .filter(a => {
+        if (a.submitted || a.status !== "pending") return false;
+        if (!a.due_date) return false; // Only assignments with specific due dates
+        const dueDate = new Date(a.due_date);
+        if (isNaN(dueDate.getTime())) return false; // Invalid date
+        return dueDate >= now; // Only future assignments
+      })
+      .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
   },
 };
 
