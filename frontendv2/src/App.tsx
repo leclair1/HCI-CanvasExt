@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Navbar from "./components/Navbar";
 import Dashboard from "./components/Dashboard";
 import CourseDetails from "./components/CourseDetails";
@@ -16,7 +16,7 @@ import Login from "./components/Login";
 import Signup from "./components/Signup";
 import ProfileSettings from "./components/ProfileSettings";
 import CanvasSessionPrompt from "./components/CanvasSessionPrompt";
-import { tokenManager } from "./lib/api";
+import { tokenManager, setCanvasSessionExpiredCallback } from "./lib/api";
 import "./styles/globals.css";
 
 type View = "login" | "signup" | "dashboard" | "course-details" | "course-selection" | "flashcard-selection" | "flashcard-study" | "quiz" | "quiz-results" | "planner" | "insights" | "ai-tutor-selection" | "ai-tutor" | "saved-flashcards" | "profile";
@@ -59,7 +59,7 @@ export default function App() {
   const [savedDecks, setSavedDecks] = useState<FlashcardDeck[]>([]);
   const [savedQuizzes, setSavedQuizzes] = useState<SavedQuiz[]>([]);
   const [currentDeck, setCurrentDeck] = useState<Flashcard[]>([]);
-  const [selectedCourse, setSelectedCourse] = useState({ id: 0, code: "CS 101", name: "Introduction to Computer Science" });
+  const [selectedCourse, setSelectedCourse] = useState({ id: 0, code: "CS 101", name: "Introduction to Computer Science", canvas_id: null as string | null });
   const [generatedFlashcards, setGeneratedFlashcards] = useState<any[]>([]);
   const [generatedQuizQuestions, setGeneratedQuizQuestions] = useState<any[]>([]);
   const [currentModuleId, setCurrentModuleId] = useState<number | null>(null);
@@ -71,6 +71,14 @@ export default function App() {
   const [aiTutorCourseName, setAiTutorCourseName] = useState<string>("");
   const [navigationIntent, setNavigationIntent] = useState<"flashcards" | "ai-tutor" | null>(null);
   const [showCanvasSessionPrompt, setShowCanvasSessionPrompt] = useState(false);
+  
+  // Debug: Log when showCanvasSessionPrompt changes
+  useEffect(() => {
+    console.log("showCanvasSessionPrompt state changed to:", showCanvasSessionPrompt);
+    if (showCanvasSessionPrompt) {
+      console.log("PROMPT SHOULD BE VISIBLE NOW!");
+    }
+  }, [showCanvasSessionPrompt]);
 
   const toggleDarkMode = () => {
     const newMode = !isDarkMode;
@@ -106,8 +114,8 @@ export default function App() {
     }
   };
 
-  const handleCourseSelect = (courseId: number, courseCode: string, courseName: string) => {
-    setSelectedCourse({ id: courseId, code: courseCode, name: courseName });
+  const handleCourseSelect = (courseId: number, courseCode: string, courseName: string, canvasId?: string | null) => {
+    setSelectedCourse({ id: courseId, code: courseCode, name: courseName, canvas_id: canvasId || null });
     
     // Navigate based on intent
     if (navigationIntent === "ai-tutor") {
@@ -264,20 +272,55 @@ export default function App() {
   };
 
   const handleLogin = async () => {
-    // Check Canvas session status from login response
+    console.log("handleLogin called");
+    
+    // Read session status BEFORE navigating
     const canvasSessionValid = sessionStorage.getItem("canvas_session_valid") === "true";
     const hasCanvasSession = sessionStorage.getItem("has_canvas_session") === "true";
     
-    // If session is invalid but user has a session stored, show prompt
-    if (!canvasSessionValid && hasCanvasSession) {
-      setShowCanvasSessionPrompt(true);
+    console.log("handleLogin - Session status from storage:", {
+      canvasSessionValid,
+      hasCanvasSession,
+      shouldShowPrompt: !canvasSessionValid || !hasCanvasSession
+    });
+    
+    // Navigate to dashboard first
+    setCurrentView("dashboard");
+    console.log("Set currentView to dashboard");
+    
+    // Show prompt immediately if needed (don't wait for useEffect)
+    if (!canvasSessionValid || !hasCanvasSession) {
+      console.log("handleLogin: Showing prompt immediately");
+      // Use a small delay to ensure dashboard renders
+      setTimeout(() => {
+        console.log("handleLogin: Setting showCanvasSessionPrompt to true");
+        setShowCanvasSessionPrompt(true);
+      }, 1000);
     }
     
-    // Clear session storage
-    sessionStorage.removeItem("canvas_session_valid");
-    sessionStorage.removeItem("has_canvas_session");
-    
-    setCurrentView("dashboard");
+    // Also set up a backup check
+    setTimeout(() => {
+      const shouldCheck = sessionStorage.getItem("check_canvas_session") === "true";
+      const canvasSessionValid2 = sessionStorage.getItem("canvas_session_valid") === "true";
+      const hasCanvasSession2 = sessionStorage.getItem("has_canvas_session") === "true";
+      
+      console.log("handleLogin backup check:", {
+        shouldCheck,
+        canvasSessionValid2,
+        hasCanvasSession2,
+        currentPromptState: showCanvasSessionPrompt
+      });
+      
+      if (shouldCheck && (!canvasSessionValid2 || !hasCanvasSession2) && !showCanvasSessionPrompt) {
+        console.log("handleLogin backup: Showing prompt");
+        setShowCanvasSessionPrompt(true);
+      }
+      
+      // Clear the check flag
+      sessionStorage.removeItem("check_canvas_session");
+      sessionStorage.removeItem("canvas_session_valid");
+      sessionStorage.removeItem("has_canvas_session");
+    }, 2000);
   };
 
   const handleSignup = () => {
@@ -292,7 +335,101 @@ export default function App() {
   const handleCanvasSessionSuccess = () => {
     // Canvas session updated successfully
     console.log("Canvas session updated successfully");
+    // Optionally refresh the current view or reload data
   };
+
+  // Set up Canvas session expiration callback and check on login
+  useEffect(() => {
+    console.log("useEffect running, currentView:", currentView);
+    
+    setCanvasSessionExpiredCallback(() => {
+      console.log("Canvas session expired callback triggered");
+      setShowCanvasSessionPrompt(true);
+    });
+
+    // Check Canvas session status after login
+    const checkLoginCanvasSession = () => {
+      const shouldCheck = sessionStorage.getItem("check_canvas_session") === "true";
+      console.log("checkLoginCanvasSession - shouldCheck:", shouldCheck, "currentView:", currentView);
+      
+      if (shouldCheck && currentView === "dashboard") {
+        const canvasSessionValid = sessionStorage.getItem("canvas_session_valid") === "true";
+        const hasCanvasSession = sessionStorage.getItem("has_canvas_session") === "true";
+        
+        console.log("Checking Canvas session after login:", {
+          canvasSessionValid,
+          hasCanvasSession,
+          shouldShowPrompt: !canvasSessionValid || !hasCanvasSession
+        });
+        
+        // Show prompt if session is invalid or missing
+        if (!canvasSessionValid || !hasCanvasSession) {
+          console.log("DECISION: Showing Canvas session prompt after login");
+          // Use requestAnimationFrame to ensure DOM is ready
+          requestAnimationFrame(() => {
+            setTimeout(() => {
+              console.log("Actually calling setShowCanvasSessionPrompt(true)");
+              setShowCanvasSessionPrompt(true);
+            }, 500);
+          });
+        } else {
+          console.log("DECISION: Not showing prompt - session is valid");
+        }
+        
+        // Clear the check flag
+        sessionStorage.removeItem("check_canvas_session");
+        sessionStorage.removeItem("canvas_session_valid");
+        sessionStorage.removeItem("has_canvas_session");
+      }
+    };
+
+    // Check immediately if we're on dashboard
+    if (currentView === "dashboard") {
+      // Small delay to ensure state is updated
+      const timer = setTimeout(() => {
+        checkLoginCanvasSession();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+
+    // Periodically check Canvas session validity when user is logged in
+    const checkCanvasSession = async () => {
+      const token = tokenManager.getToken();
+      if (!token || currentView === "login" || currentView === "signup") {
+        return;
+      }
+
+      try {
+        const { authAPI } = await import("./lib/api");
+        const result = await authAPI.validateCanvasSession(token);
+        
+        console.log("Periodic Canvas session check:", result);
+        
+        // If session is invalid but user has a session, show prompt
+        if (!result.is_valid && result.has_session) {
+          console.log("Canvas session expired - showing prompt");
+          setShowCanvasSessionPrompt(true);
+        } else if (!result.has_session) {
+          // No session at all - show prompt
+          console.log("No Canvas session found - showing prompt");
+          setShowCanvasSessionPrompt(true);
+        }
+      } catch (error) {
+        // Silently fail - don't interrupt user experience
+        console.log("Canvas session check failed:", error);
+      }
+    };
+
+    // Check immediately on mount (if logged in and not just logged in)
+    if (currentView !== "login" && currentView !== "signup" && currentView !== "dashboard") {
+      checkCanvasSession();
+    }
+
+    // Check every 5 minutes
+    const interval = setInterval(checkCanvasSession, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [currentView]);
 
   // Show login/signup without navbar
   if (currentView === "login" || currentView === "signup") {
@@ -317,10 +454,18 @@ export default function App() {
   return (
     <div className="min-h-screen">
       {/* Canvas Session Prompt Modal */}
+      {/* Canvas Session Prompt - Always rendered, controlled by isOpen */}
       <CanvasSessionPrompt
         isOpen={showCanvasSessionPrompt}
-        onClose={() => setShowCanvasSessionPrompt(false)}
-        onSuccess={handleCanvasSessionSuccess}
+        onClose={() => {
+          console.log("Closing Canvas session prompt");
+          setShowCanvasSessionPrompt(false);
+        }}
+        onSuccess={() => {
+          console.log("Canvas session updated successfully");
+          handleCanvasSessionSuccess();
+          setShowCanvasSessionPrompt(false);
+        }}
       />
 
       {/* Persistent Navbar */}
@@ -330,6 +475,10 @@ export default function App() {
         isDarkMode={isDarkMode}
         onToggleDarkMode={toggleDarkMode}
         onLogout={handleLogout}
+        onShowCanvasPrompt={() => {
+          console.log("Manual Canvas session prompt trigger");
+          setShowCanvasSessionPrompt(true);
+        }}
       />
 
       {/* Main Content */}
@@ -366,6 +515,10 @@ export default function App() {
       {currentView === "flashcard-selection" && (
         <FlashcardSelection
           onBack={() => setCurrentView("course-selection")}
+          courseId={selectedCourse.id}
+          courseCode={selectedCourse.code}
+          courseName={selectedCourse.name}
+          canvasCourseId={selectedCourse.canvas_id}
           onStartStudying={(flashcards, moduleId, count, files) => {
             if (flashcards) {
               console.log("Received generated flashcards:", flashcards);
@@ -403,6 +556,7 @@ export default function App() {
           courseId={selectedCourse.id}
           courseCode={selectedCourse.code}
           courseName={selectedCourse.name}
+          canvasCourseId={selectedCourse.canvas_id}
         />
       )}
       {currentView === "flashcard-study" && (
@@ -466,19 +620,20 @@ export default function App() {
       )}
       {currentView === "ai-tutor-selection" && (
         <AITutorSelection
-          onBack={() => setCurrentView("dashboard")}
+          onBack={() => setCurrentView("course-selection")}
+          courseId={selectedCourse.id}
+          courseCode={selectedCourse.code}
+          courseName={selectedCourse.name}
+          canvasCourseId={selectedCourse.canvas_id}
           onStartChat={(moduleId, selectedFiles, courseName) => {
             setAiTutorModuleId(moduleId);
             setAiTutorSelectedFiles(selectedFiles);
             setAiTutorCourseName(courseName);
             setCurrentView("ai-tutor");
           }}
-          courseId={selectedCourse.id}
-          courseCode={selectedCourse.code}
-          courseName={selectedCourse.name}
         />
       )}
-      {currentView === "ai-tutor" && aiTutorModuleId && (
+      {currentView === "ai-tutor" && aiTutorSelectedFiles.length > 0 && (
         <AITutor 
           onBack={() => setCurrentView("ai-tutor-selection")}
           moduleId={aiTutorModuleId}

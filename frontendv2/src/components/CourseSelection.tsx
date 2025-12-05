@@ -4,7 +4,7 @@ import { coursesAPI, Course } from "../lib/api";
 
 interface CourseSelectionProps {
   onBack: () => void;
-  onSelectCourse: (courseId: number, courseCode: string, courseName: string) => void;
+  onSelectCourse: (courseId: number, courseCode: string, courseName: string, canvasId?: string | null) => void;
 }
 
 export default function CourseSelection({ onBack, onSelectCourse }: CourseSelectionProps) {
@@ -60,7 +60,7 @@ export default function CourseSelection({ onBack, onSelectCourse }: CourseSelect
             {courses.map((course) => (
               <button
                 key={course.id}
-                onClick={() => onSelectCourse(course.id, course.code, course.name)}
+                onClick={() => onSelectCourse(course.id, course.code, course.name, course.canvas_id)}
                 className="w-full bg-card rounded-2xl p-6 border border-border hover:border-accent transition-all text-left group"
                 style={{ borderLeftColor: course.color, borderLeftWidth: '4px' }}
               >

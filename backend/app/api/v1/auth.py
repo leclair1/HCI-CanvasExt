@@ -212,25 +212,24 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
             canvas_url = user.canvas_instance_url or "https://usflearn.instructure.com"
             
             if session_cookie:
-                import requests
-                # Quick check - just try to access Canvas homepage
-                test_url = f"{canvas_url}/courses"
-                response = requests.get(
-                    test_url, 
-                    cookies={"canvas_session": session_cookie},
-                    timeout=3,  # 3 second timeout
-                    allow_redirects=False
+                # Use CanvasScraper to properly validate session
+                scraper = CanvasScraper(
+                    base_url=canvas_url,
+                    session_cookie=session_cookie
                 )
-                canvas_session_valid = (response.status_code == 200)
+                
+                # Try to get courses - this is a better validation than just checking homepage
+                try:
+                    courses = scraper.get_all_courses()
+                    canvas_session_valid = len(courses) > 0
+                    print(f"Canvas session validation: {canvas_session_valid} (found {len(courses)} courses)")
+                except Exception as validation_error:
+                    print(f"Canvas session validation failed: {validation_error}")
+                    canvas_session_valid = False
                 
                 # If session is valid, sync assignments in background
                 if canvas_session_valid:
                     try:
-                        scraper = CanvasScraper(
-                            base_url=canvas_url,
-                            session_cookie=session_cookie
-                        )
-                        
                         # Get all user's courses
                         user_courses = db.query(Course).filter(Course.user_id == user.id).all()
                         
@@ -238,7 +237,7 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
                             if not course.canvas_id:
                                 continue
                                 
-                            # Fetch assignments from Canvas
+                            # Fetch assignments from Canvas (scraper already created above)
                             assignments_data = scraper.get_course_assignments(course.canvas_id)
                             
                             for assign_data in assignments_data:
@@ -406,14 +405,42 @@ async def update_canvas_session(
         )
         
         # Validate by fetching courses
-        courses = scraper.get_all_courses()
+        try:
+            courses = scraper.get_all_courses()
+            
+            if not courses:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Canvas session cookie appears valid but no courses were found. Please ensure you have access to at least one course."
+                )
+        except HTTPException:
+            raise  # Re-raise HTTP exceptions as-is
+        except Exception as e:
+            error_msg = str(e)
+            # Provide more helpful error messages
+            if "401" in error_msg or "Unauthorized" in error_msg:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Canvas session cookie is invalid or expired. Please get a fresh session cookie from Canvas."
+                )
+            elif "400" in error_msg or "Invalid" in error_msg:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid Canvas session cookie. Please check that you copied the entire cookie value correctly."
+                )
+            elif "redirected to login" in error_msg.lower() or "expired" in error_msg.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Canvas session has expired. Please get a fresh session cookie from Canvas."
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Failed to validate Canvas session: {error_msg}"
+                )
         
-        if not courses:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid Canvas session cookie - could not fetch courses"
-            )
-        
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -443,7 +470,7 @@ async def update_canvas_session(
             name = course_data['name']
             code = name.split('.')[0] if '.' in name else name.split()[0]
             
-            # Check if course already exists
+            # Check if course already exists by canvas_id
             existing_course = db.query(Course).filter(
                 Course.canvas_id == canvas_id,
                 Course.user_id == current_user.id
@@ -451,21 +478,40 @@ async def update_canvas_session(
             
             if existing_course:
                 course = existing_course
+                # Update course info if needed
+                if existing_course.name != name:
+                    existing_course.name = name
+                if existing_course.code != code:
+                    existing_course.code = code
             else:
-                course = Course(
-                    canvas_id=canvas_id,
-                    user_id=current_user.id,
-                    code=code,
-                    name=name,
-                    instructor="TBD",
-                    term="Current Semester",
-                    progress=0.0,
-                    color=colors[idx % len(colors)],
-                    is_active=1
-                )
-                db.add(course)
-                db.flush()
-                courses_synced += 1
+                # Check if course exists by name/code but without canvas_id
+                existing_by_name = db.query(Course).filter(
+                    Course.user_id == current_user.id,
+                    Course.name == name
+                ).first()
+                
+                if existing_by_name and not existing_by_name.canvas_id:
+                    # Update existing course with canvas_id
+                    existing_by_name.canvas_id = canvas_id
+                    existing_by_name.code = code
+                    course = existing_by_name
+                    courses_synced += 1
+                else:
+                    # Create new course
+                    course = Course(
+                        canvas_id=canvas_id,
+                        user_id=current_user.id,
+                        code=code,
+                        name=name,
+                        instructor="TBD",
+                        term="Current Semester",
+                        progress=0.0,
+                        color=colors[idx % len(colors)],
+                        is_active=1
+                    )
+                    db.add(course)
+                    db.flush()
+                    courses_synced += 1
             
             # Import modules
             for pos, module_data in enumerate(course_data.get('modules', [])):

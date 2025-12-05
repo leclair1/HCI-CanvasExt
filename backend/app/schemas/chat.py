@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
+from typing import Optional
 
 class ChatMessageBase(BaseModel):
     course_id: str
@@ -14,9 +15,10 @@ class ChatMessage(ChatMessageBase):
         from_attributes = True
 
 class ChatRequest(BaseModel):
-    module_id: int
+    module_id: Optional[int] = None
     message: str
     file_urls: list[str] = []  # URLs of selected files for RAG context
+    include_files_tab: bool = False
 
 class ChatResponse(BaseModel):
     message: str

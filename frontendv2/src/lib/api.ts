@@ -1,6 +1,24 @@
 // API Configuration
 const API_BASE_URL = "http://localhost:8000/api/v1";
 
+// Global callback for Canvas session expiration
+let onCanvasSessionExpired: (() => void) | null = null;
+
+export const setCanvasSessionExpiredCallback = (callback: () => void) => {
+  onCanvasSessionExpired = callback;
+};
+
+// Helper to check if error is related to Canvas session
+const isCanvasSessionError = (error: any): boolean => {
+  if (!error) return false;
+  const errorMessage = error.message?.toLowerCase() || error.detail?.toLowerCase() || "";
+  return (
+    errorMessage.includes("canvas session") ||
+    errorMessage.includes("session cookie") ||
+    errorMessage.includes("canvas") && (errorMessage.includes("expired") || errorMessage.includes("invalid") || errorMessage.includes("required"))
+  );
+};
+
 // Types
 export interface SignupData {
   first_name: string;
@@ -317,6 +335,52 @@ export const assignmentsAPI = {
   },
 };
 
+// Course Files API
+export interface CourseFile {
+  name: string;
+  url: string;
+  size?: string | number | null;
+  content_type?: string | null;
+  updated_at?: string | null;
+}
+
+export const courseFilesAPI = {
+  async getCourseFiles(canvasCourseId: string, canvasUrl?: string, sessionCookie?: string): Promise<CourseFile[]> {
+    const token = tokenManager.getToken();
+    if (!token) {
+      throw new Error("Not authenticated");
+    }
+    
+    const response = await fetch(`${API_BASE_URL}/canvas/files`, {
+      method: "POST",
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        course_id: canvasCourseId,
+        canvas_url: canvasUrl || "https://usflearn.instructure.com",
+        session_cookie: sessionCookie || ""
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: "Failed to fetch course files" }));
+      const errorObj = { message: error.detail || "Failed to fetch course files", detail: error.detail };
+      
+      // Check if it's a Canvas session error
+      if (isCanvasSessionError(errorObj) && onCanvasSessionExpired) {
+        onCanvasSessionExpired();
+      }
+      
+      throw new Error(error.detail || "Failed to fetch course files");
+    }
+
+    const result = await response.json();
+    return result.files || [];
+  },
+};
+
 // Modules API
 export const modulesAPI = {
   async getCourseModules(courseId: number): Promise<Module[]> {
@@ -333,7 +397,15 @@ export const modulesAPI = {
     });
 
     if (!response.ok) {
-      throw new Error("Failed to fetch modules");
+      const error = await response.json().catch(() => ({ detail: "Failed to fetch modules" }));
+      const errorObj = { message: error.detail || "Failed to fetch modules", detail: error.detail };
+      
+      // Check if it's a Canvas session error
+      if (isCanvasSessionError(errorObj) && onCanvasSessionExpired) {
+        onCanvasSessionExpired();
+      }
+      
+      throw new Error(error.detail || "Failed to fetch modules");
     }
 
     return response.json();
@@ -362,10 +434,21 @@ export const modulesAPI = {
 
 // Flashcards API
 export const flashcardsAPI = {
-  async generateFromModule(moduleId: number, numCards: number, fileUrls?: string[]): Promise<{ flashcards: any[], module_name: string, count: number }> {
+  async generateFromModule(moduleId: number | null, numCards: number, fileUrls?: string[], includeFilesTab?: boolean): Promise<{ flashcards: any[], module_name: string, count: number }> {
     const token = tokenManager.getToken();
     if (!token) {
       throw new Error("Not authenticated");
+    }
+    
+    const requestBody: any = {
+      num_cards: numCards,
+      ...(fileUrls && fileUrls.length > 0 && { file_urls: fileUrls }),
+      ...(includeFilesTab !== undefined && { include_files_tab: includeFilesTab })
+    };
+    
+    // Only include module_id if provided
+    if (moduleId !== null && moduleId !== undefined) {
+      requestBody.module_id = moduleId;
     }
     
     const response = await fetch(`${API_BASE_URL}/flashcards/generate`, {
@@ -374,25 +457,39 @@ export const flashcardsAPI = {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        module_id: moduleId,
-        num_cards: numCards,
-        ...(fileUrls && fileUrls.length > 0 && { file_urls: fileUrls })
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: "Failed to generate flashcards" }));
-      throw new Error(error.detail);
+      const errorObj = { message: error.detail || "Failed to generate flashcards", detail: error.detail };
+      
+      // Check if it's a Canvas session error
+      if (isCanvasSessionError(errorObj) && onCanvasSessionExpired) {
+        onCanvasSessionExpired();
+      }
+      
+      throw new Error(error.detail || "Failed to generate flashcards");
     }
 
     return response.json();
   },
 
-  async generateQuizFromModule(moduleId: number, numQuestions: number, fileUrls?: string[]): Promise<{ questions: any[], module_name: string, count: number }> {
+  async generateQuizFromModule(moduleId: number | null, numQuestions: number, fileUrls?: string[], includeFilesTab?: boolean): Promise<{ questions: any[], module_name: string, count: number }> {
     const token = tokenManager.getToken();
     if (!token) {
       throw new Error("Not authenticated");
+    }
+    
+    const requestBody: any = {
+      num_questions: numQuestions,
+      ...(fileUrls && fileUrls.length > 0 && { file_urls: fileUrls }),
+      ...(includeFilesTab !== undefined && { include_files_tab: includeFilesTab })
+    };
+    
+    // Only include module_id if provided
+    if (moduleId !== null && moduleId !== undefined) {
+      requestBody.module_id = moduleId;
     }
     
     const response = await fetch(`${API_BASE_URL}/quizzes/generate`, {
@@ -401,16 +498,19 @@ export const flashcardsAPI = {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        module_id: moduleId,
-        num_questions: numQuestions,
-        ...(fileUrls && fileUrls.length > 0 && { file_urls: fileUrls })
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: "Failed to generate quiz" }));
-      throw new Error(error.detail);
+      const errorObj = { message: error.detail || "Failed to generate quiz", detail: error.detail };
+      
+      // Check if it's a Canvas session error
+      if (isCanvasSessionError(errorObj) && onCanvasSessionExpired) {
+        onCanvasSessionExpired();
+      }
+      
+      throw new Error(error.detail || "Failed to generate quiz");
     }
 
     return response.json();
@@ -479,10 +579,21 @@ export interface ChatResponse {
 }
 
 export const chatAPI = {
-  async sendMessage(moduleId: number, message: string, selectedFiles: string[]): Promise<ChatResponse> {
+  async sendMessage(moduleId: number | null, message: string, selectedFiles: string[], includeFilesTab?: boolean): Promise<ChatResponse> {
     const token = tokenManager.getToken();
     if (!token) {
       throw new Error("Not authenticated");
+    }
+
+    const requestBody: any = {
+      message,
+      file_urls: selectedFiles,
+      ...(includeFilesTab !== undefined && { include_files_tab: includeFilesTab })
+    };
+    
+    // Only include module_id if provided
+    if (moduleId !== null && moduleId !== undefined) {
+      requestBody.module_id = moduleId;
     }
 
     const response = await fetch(`${API_BASE_URL}/chat`, {
@@ -491,15 +602,19 @@ export const chatAPI = {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        module_id: moduleId,
-        message,
-        file_urls: selectedFiles
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
-      throw new Error("Failed to send message");
+      const error = await response.json().catch(() => ({ detail: "Failed to send message" }));
+      const errorObj = { message: error.detail || "Failed to send message", detail: error.detail };
+      
+      // Check if it's a Canvas session error
+      if (isCanvasSessionError(errorObj) && onCanvasSessionExpired) {
+        onCanvasSessionExpired();
+      }
+      
+      throw new Error(error.detail || "Failed to send message");
     }
 
     return response.json();
@@ -543,7 +658,7 @@ export const chatAPI = {
   },
 
   // Active Recall
-  async generateQuestion(moduleId: number, fileUrls: string[]): Promise<{ question: string }> {
+  async generateQuestion(moduleId: number | null, fileUrls: string[], includeFilesTab?: boolean): Promise<{ question: string }> {
     const token = tokenManager.getToken();
     if (!token) {
       throw new Error("Not authenticated");
@@ -556,8 +671,9 @@ export const chatAPI = {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        module_id: moduleId,
-        file_urls: fileUrls
+        ...(moduleId !== null && moduleId !== undefined && { module_id: moduleId }),
+        file_urls: fileUrls,
+        ...(includeFilesTab !== undefined && { include_files_tab: includeFilesTab })
       })
     });
 
@@ -571,9 +687,10 @@ export const chatAPI = {
   async gradeAnswer(
     question: string, 
     userAnswer: string, 
-    moduleId: number, 
+    moduleId: number | null, 
     fileUrls: string[], 
-    difficulty: string
+    difficulty: string = "balanced",
+    includeFilesTab?: boolean
   ): Promise<{ score: number; feedback: string; correct_answer: string; passed: boolean }> {
     const token = tokenManager.getToken();
     if (!token) {
@@ -589,9 +706,10 @@ export const chatAPI = {
       body: JSON.stringify({
         question,
         user_answer: userAnswer,
-        module_id: moduleId,
+        ...(moduleId !== null && moduleId !== undefined && { module_id: moduleId }),
         file_urls: fileUrls,
-        difficulty
+        difficulty,
+        ...(includeFilesTab !== undefined && { include_files_tab: includeFilesTab })
       })
     });
 

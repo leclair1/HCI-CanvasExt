@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 from app.db.database import get_db
 from app.models.user import User
@@ -13,6 +13,8 @@ from app.schemas.quiz import (
 from app.api.v1.auth import get_current_user
 from app.core.encryption import decrypt_data
 from app.services.flashcard_generator import generate_quiz_with_groq, extract_text_from_url
+from app.services.canvas_scraper import CanvasScraper
+from app.models.course import Course
 
 router = APIRouter()
 
@@ -165,44 +167,100 @@ async def generate_quiz(
 ):
     """Generate quiz questions from module content using AI"""
     
-    # Get the module
-    module = db.query(Module).filter(Module.id == request.module_id).first()
-    if not module:
-        raise HTTPException(status_code=404, detail="Module not found")
+    # Get the module (may be None if using files only)
+    module = None
+    if request.module_id:
+        module = db.query(Module).filter(Module.id == request.module_id).first()
+        if not module:
+            raise HTTPException(status_code=404, detail="Module not found")
     
-    print(f"\n=== Generating quiz for module: {module.name} ===")
+    module_name = module.name if module else "Selected Files"
+    print(f"\n=== Generating quiz from: {module_name} ===")
     
     # Get user's Canvas session cookie
     if not current_user.canvas_session_cookie:
         raise HTTPException(
             status_code=400,
-            detail="Canvas session cookie not available"
+            detail="Canvas session cookie not available. Please provide a Canvas session cookie to generate quiz questions."
         )
     
     # Decrypt session cookie
     session_cookie = decrypt_data(current_user.canvas_session_cookie)
     
-    # Extract text from module items
+    # Extract text from module items or selected files
     all_text = ""
     items_processed = 0
     
-    print(f"\n=== Processing module: {module.name} ===")
-    
     # Parse items if they're stored as JSON string
     import json as json_lib
-    items = module.items
-    if isinstance(items, str):
-        items = json_lib.loads(items)
-    elif items is None:
-        items = []
+    items = []
+    if module:
+        print(f"\n=== Processing module: {module.name} ===")
+        items = module.items
+        if isinstance(items, str):
+            items = json_lib.loads(items)
+        elif items is None:
+            items = []
+        print(f"Module has {len(items)} items")
+    else:
+        print("\n=== Processing selected files (no module) ===")
     
-    print(f"Module has {len(items)} items")
+    # If include_files_tab is True, fetch files from Canvas Files tab
+    files_tab_urls = []
+    if request.include_files_tab:
+        try:
+            # Get course ID from module or from first file URL (if we can extract it)
+            course = None
+            if module:
+                course = db.query(Course).filter(Course.id == module.course_id).first()
+            elif request.file_urls and len(request.file_urls) > 0:
+                # Try to extract course ID from file URL
+                import re
+                for file_url in request.file_urls:
+                    match = re.search(r'/courses/(\d+)/files/', file_url)
+                    if match:
+                        canvas_course_id = match.group(1)
+                        # Find course by canvas_id
+                        course = db.query(Course).filter(
+                            Course.canvas_id == canvas_course_id,
+                            Course.user_id == current_user.id
+                        ).first()
+                        if course:
+                            break
+            
+            if course and course.canvas_id:
+                print(f"Scanning Files tab for course {course.canvas_id}...")
+                scraper = CanvasScraper(
+                    base_url=current_user.canvas_instance_url or "https://usflearn.instructure.com",
+                    session_cookie=session_cookie
+                )
+                files_tab_files = scraper.get_course_files(course.canvas_id)
+                files_tab_urls = [f.get('url', '') for f in files_tab_files if f.get('url')]
+                print(f"Found {len(files_tab_urls)} files from Files tab")
+        except Exception as e:
+            print(f"Warning: Failed to scan Files tab: {e}")
     
-    # If specific file URLs were provided, use only those
-    if request.file_urls and len(request.file_urls) > 0:
-        print(f"Using {len(request.file_urls)} user-selected files")
-        for file_url in request.file_urls:
-            item_name = next((item.get('title', 'Unknown') for item in items if item.get('url') == file_url), 'Unknown')
+    # Combine user-selected files with files tab files if requested
+    all_file_urls = list(request.file_urls) if request.file_urls else []
+    if files_tab_urls:
+        all_file_urls.extend(files_tab_urls)
+        # Remove duplicates
+        all_file_urls = list(dict.fromkeys(all_file_urls))
+    
+    # If specific file URLs were provided (or from files tab), use those
+    if all_file_urls and len(all_file_urls) > 0:
+        print(f"Using {len(all_file_urls)} files (user-selected + files tab)")
+        for file_url in all_file_urls:
+            # Find the item name from the module items or use URL as fallback
+            item_name = 'Unknown'
+            if module and items:
+                item_name = next((item.get('title', 'Unknown') for item in items if item.get('url') == file_url), 'Unknown')
+            else:
+                # Extract filename from URL
+                import os
+                from urllib.parse import urlparse, unquote
+                parsed = urlparse(file_url)
+                item_name = os.path.basename(unquote(parsed.path)) or 'File'
             
             print(f"Processing selected file: {item_name}")
             text = extract_text_from_url(
@@ -216,7 +274,7 @@ async def generate_quiz(
                 items_processed += 1
             else:
                 print(f"  Failed to extract text or too short")
-    else:
+    elif module:
         # Default behavior: process all items
         for item in items[:10]:
             item_url = item.get('url', '')
@@ -237,9 +295,10 @@ async def generate_quiz(
     print(f"Total text extracted: {len(all_text)} characters from {items_processed} items")
     
     if len(all_text) < 200:
+        module_or_files = f"module '{module.name}'" if module else "selected files"
         raise HTTPException(
             status_code=400,
-            detail=f"Not enough content found in module '{module.name}'. Try a module with PDF files or more content."
+            detail=f"Not enough content found in {module_or_files}. Try selecting files with more content or ensure files are accessible."
         )
     
     # Generate quiz using Groq
@@ -247,14 +306,14 @@ async def generate_quiz(
         print(f"Sending to Groq for quiz generation...")
         questions = generate_quiz_with_groq(
             content=all_text,
-            module_name=module.name,
+            module_name=module_name,
             num_questions=request.num_questions
         )
         print(f"Generated {len(questions)} quiz questions")
         
         return GenerateQuizResponse(
             questions=questions,
-            module_name=module.name,
+            module_name=module_name,
             count=len(questions)
         )
         

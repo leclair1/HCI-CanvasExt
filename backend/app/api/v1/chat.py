@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from typing import Optional
 from app.db.database import get_db
 from app.models.chat_message import ChatMessage as ChatMessageModel
 from app.models.user import User
@@ -14,6 +15,8 @@ from app.services.flashcard_generator import (
     generate_active_recall_question_with_groq,
     grade_active_recall_answer_with_groq
 )
+from app.services.canvas_scraper import CanvasScraper
+from app.models.course import Course
 from app.api.v1.auth import get_current_user
 import random
 
@@ -82,29 +85,75 @@ async def chat(
     print(f"User Message: {request.message}")
     print(f"Selected Files: {len(request.file_urls)}")
     
-    # Get module for context
-    module = db.query(Module).filter(Module.id == request.module_id).first()
-    if not module:
-        raise HTTPException(status_code=404, detail="Module not found")
+    # Get module for context (optional)
+    module = None
+    if request.module_id:
+        module = db.query(Module).filter(Module.id == request.module_id).first()
+        if not module:
+            raise HTTPException(status_code=404, detail="Module not found")
+    
+    module_name = module.name if module else "Selected Files"
     
     # Get user's Canvas session cookie for file access
     if not current_user.canvas_session_cookie:
         raise HTTPException(
             status_code=400,
-            detail="No Canvas session cookie available. Please re-authenticate with Canvas."
+            detail="Canvas session cookie not available. Please provide a Canvas session cookie to use the AI tutor."
         )
     
     # Decrypt session cookie
     session_cookie = decrypt_data(current_user.canvas_session_cookie)
     
+    # If include_files_tab is True, fetch files from Canvas Files tab
+    files_tab_urls = []
+    if request.include_files_tab:
+        try:
+            # Get course ID from module or from first file URL (if we can extract it)
+            course = None
+            if module:
+                course = db.query(Course).filter(Course.id == module.course_id).first()
+            elif request.file_urls and len(request.file_urls) > 0:
+                # Try to extract course ID from file URL
+                import re
+                for file_url in request.file_urls:
+                    match = re.search(r'/courses/(\d+)/files/', file_url)
+                    if match:
+                        canvas_course_id = match.group(1)
+                        # Find course by canvas_id
+                        course = db.query(Course).filter(
+                            Course.canvas_id == canvas_course_id,
+                            Course.user_id == current_user.id
+                        ).first()
+                        if course:
+                            break
+            
+            if course and course.canvas_id:
+                print(f"Scanning Files tab for course {course.canvas_id}...")
+                scraper = CanvasScraper(
+                    base_url=current_user.canvas_instance_url or settings.CANVAS_INSTANCE_URL,
+                    session_cookie=session_cookie
+                )
+                files_tab_files = scraper.get_course_files(course.canvas_id)
+                files_tab_urls = [f.get('url', '') for f in files_tab_files if f.get('url')]
+                print(f"Found {len(files_tab_urls)} files from Files tab")
+        except Exception as e:
+            print(f"Warning: Failed to scan Files tab: {e}")
+    
+    # Combine user-selected files with files tab files if requested
+    all_file_urls = list(request.file_urls) if request.file_urls else []
+    if files_tab_urls:
+        all_file_urls.extend(files_tab_urls)
+        # Remove duplicates
+        all_file_urls = list(dict.fromkeys(all_file_urls))
+    
     # Extract text from selected files (RAG context)
     context_text = ""
     references = []
     
-    if request.file_urls and len(request.file_urls) > 0:
-        print(f"\nExtracting text from {len(request.file_urls)} files for RAG context...")
+    if all_file_urls and len(all_file_urls) > 0:
+        print(f"\nExtracting text from {len(all_file_urls)} files for RAG context...")
         
-        for file_url in request.file_urls[:5]:  # Limit to 5 files to avoid token limits
+        for file_url in all_file_urls[:5]:  # Limit to 5 files to avoid token limits
             try:
                 print(f"  Processing: {file_url[:80]}...")
                 text = extract_text_from_url(
@@ -138,7 +187,7 @@ async def chat(
             response_text = generate_chat_response_with_groq(
                 question=request.message,
                 context=context_text[:15000],  # Limit context to avoid token limits
-                module_name=module.name
+                module_name=module_name
             )
             print("✓ AI response generated successfully")
         except Exception as e:
@@ -178,8 +227,9 @@ async def clear_chat_history(course_id: str, db: Session = Depends(get_db)):
 
 class ActiveRecallQuestionRequest(BaseModel):
     """Request to generate an active recall question"""
-    module_id: int
+    module_id: Optional[int] = None
     file_urls: list[str] = []
+    include_files_tab: bool = False  # If True, scan and include files from Canvas Files tab
 
 
 class ActiveRecallQuestionResponse(BaseModel):
@@ -191,9 +241,10 @@ class ActiveRecallGradeRequest(BaseModel):
     """Request to grade an answer"""
     question: str
     user_answer: str
-    module_id: int
+    module_id: Optional[int] = None
     file_urls: list[str] = []
     difficulty: str = "balanced"  # easy, balanced, tough
+    include_files_tab: bool = False  # If True, scan and include files from Canvas Files tab
 
 
 class ActiveRecallGradeResponse(BaseModel):
@@ -215,10 +266,14 @@ async def generate_question(
     print(f"Module ID: {request.module_id}")
     print(f"Selected Files: {len(request.file_urls)}")
     
-    # Get module
-    module = db.query(Module).filter(Module.id == request.module_id).first()
-    if not module:
-        raise HTTPException(status_code=404, detail="Module not found")
+    # Get module (optional)
+    module = None
+    if request.module_id:
+        module = db.query(Module).filter(Module.id == request.module_id).first()
+        if not module:
+            raise HTTPException(status_code=404, detail="Module not found")
+    
+    module_name = module.name if module else "Selected Files"
     
     # Get session cookie
     if not current_user.canvas_session_cookie:
@@ -226,13 +281,52 @@ async def generate_question(
     
     session_cookie = decrypt_data(current_user.canvas_session_cookie)
     
+    # If include_files_tab is True, fetch files from Canvas Files tab
+    files_tab_urls = []
+    if request.include_files_tab:
+        try:
+            # Get course ID from module or from first file URL (if we can extract it)
+            course = None
+            if module:
+                course = db.query(Course).filter(Course.id == module.course_id).first()
+            elif request.file_urls and len(request.file_urls) > 0:
+                # Try to extract course ID from file URL
+                import re
+                for file_url in request.file_urls:
+                    match = re.search(r'/courses/(\d+)/files/', file_url)
+                    if match:
+                        canvas_course_id = match.group(1)
+                        # Find course by canvas_id
+                        course = db.query(Course).filter(
+                            Course.canvas_id == canvas_course_id,
+                            Course.user_id == current_user.id
+                        ).first()
+                        if course:
+                            break
+            
+            if course and course.canvas_id:
+                scraper = CanvasScraper(
+                    base_url=current_user.canvas_instance_url or settings.CANVAS_INSTANCE_URL,
+                    session_cookie=session_cookie
+                )
+                files_tab_files = scraper.get_course_files(course.canvas_id)
+                files_tab_urls = [f.get('url', '') for f in files_tab_files if f.get('url')]
+        except Exception as e:
+            print(f"Warning: Failed to scan Files tab: {e}")
+    
+    # Combine user-selected files with files tab files if requested
+    all_file_urls = list(request.file_urls) if request.file_urls else []
+    if files_tab_urls:
+        all_file_urls.extend(files_tab_urls)
+        all_file_urls = list(dict.fromkeys(all_file_urls))
+    
     # Extract text from selected files
     context_text = ""
     
-    if request.file_urls and len(request.file_urls) > 0:
-        print(f"Extracting text from {len(request.file_urls)} files...")
+    if all_file_urls and len(all_file_urls) > 0:
+        print(f"Extracting text from {len(all_file_urls)} files...")
         
-        for file_url in request.file_urls[:3]:  # Limit to 3 files
+        for file_url in all_file_urls[:3]:  # Limit to 3 files
             try:
                 text = extract_text_from_url(
                     file_url,
@@ -259,7 +353,7 @@ async def generate_question(
     try:
         question = generate_active_recall_question_with_groq(
             context=context_text[:10000],  # Limit context
-            module_name=module.name
+            module_name=module_name
         )
         print(f"✓ Question generated: {question[:80]}...")
         
@@ -282,10 +376,12 @@ async def grade_answer(
     print(f"Answer length: {len(request.user_answer)} characters")
     print(f"Difficulty: {request.difficulty}")
     
-    # Get module
-    module = db.query(Module).filter(Module.id == request.module_id).first()
-    if not module:
-        raise HTTPException(status_code=404, detail="Module not found")
+    # Get module (optional)
+    module = None
+    if request.module_id:
+        module = db.query(Module).filter(Module.id == request.module_id).first()
+        if not module:
+            raise HTTPException(status_code=404, detail="Module not found")
     
     # Get session cookie
     if not current_user.canvas_session_cookie:
@@ -293,11 +389,50 @@ async def grade_answer(
     
     session_cookie = decrypt_data(current_user.canvas_session_cookie)
     
+    # If include_files_tab is True, fetch files from Canvas Files tab
+    files_tab_urls = []
+    if request.include_files_tab:
+        try:
+            # Get course ID from module or from first file URL (if we can extract it)
+            course = None
+            if module:
+                course = db.query(Course).filter(Course.id == module.course_id).first()
+            elif request.file_urls and len(request.file_urls) > 0:
+                # Try to extract course ID from file URL
+                import re
+                for file_url in request.file_urls:
+                    match = re.search(r'/courses/(\d+)/files/', file_url)
+                    if match:
+                        canvas_course_id = match.group(1)
+                        # Find course by canvas_id
+                        course = db.query(Course).filter(
+                            Course.canvas_id == canvas_course_id,
+                            Course.user_id == current_user.id
+                        ).first()
+                        if course:
+                            break
+            
+            if course and course.canvas_id:
+                scraper = CanvasScraper(
+                    base_url=current_user.canvas_instance_url or settings.CANVAS_INSTANCE_URL,
+                    session_cookie=session_cookie
+                )
+                files_tab_files = scraper.get_course_files(course.canvas_id)
+                files_tab_urls = [f.get('url', '') for f in files_tab_files if f.get('url')]
+        except Exception as e:
+            print(f"Warning: Failed to scan Files tab: {e}")
+    
+    # Combine user-selected files with files tab files if requested
+    all_file_urls = list(request.file_urls) if request.file_urls else []
+    if files_tab_urls:
+        all_file_urls.extend(files_tab_urls)
+        all_file_urls = list(dict.fromkeys(all_file_urls))
+    
     # Extract text from selected files (same as question generation)
     context_text = ""
     
-    if request.file_urls and len(request.file_urls) > 0:
-        for file_url in request.file_urls[:3]:
+    if all_file_urls and len(all_file_urls) > 0:
+        for file_url in all_file_urls[:3]:
             try:
                 text = extract_text_from_url(
                     file_url,

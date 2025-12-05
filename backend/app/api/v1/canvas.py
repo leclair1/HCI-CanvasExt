@@ -12,6 +12,7 @@ from app.services.canvas_scraper import CanvasScraper
 from app.models.user import User
 from app.models.course import Course
 from app.models.module import Module
+from app.api.v1.auth import get_current_user
 from datetime import datetime
 from typing import List, Dict
 
@@ -410,6 +411,109 @@ def validate_canvas_session(
         return CanvasSessionValidateResponse(
             is_valid=False,
             message=f"Canvas session validation failed: {str(e)}"
+        )
+
+
+class CourseFilesRequest(BaseModel):
+    """Request model for getting course files"""
+    course_id: str = Field(..., description="Canvas course ID")
+    canvas_url: str = Field(..., description="Canvas instance URL")
+    session_cookie: str = Field(..., description="Canvas session cookie")
+
+
+class CourseFile(BaseModel):
+    """Model for a course file"""
+    name: str
+    url: str
+    size: str | int | None = None
+    content_type: str | None = None
+    updated_at: str | None = None
+
+
+class CourseFilesResponse(BaseModel):
+    """Response model for course files"""
+    success: bool
+    files: List[CourseFile]
+    count: int
+    message: str
+
+
+@router.post("/files", response_model=CourseFilesResponse)
+def get_course_files(
+    request: CourseFilesRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get all files from the Files tab of a Canvas course
+    
+    This endpoint scans the Canvas Files tab and returns all available files
+    that can be used for flashcards, quizzes, and AI tutor.
+    """
+    try:
+        # Use provided session cookie or fall back to user's stored cookie
+        session_cookie = request.session_cookie
+        canvas_url = request.canvas_url
+        
+        if not session_cookie and current_user.canvas_session_cookie:
+            from app.core.encryption import decrypt_data
+            session_cookie = decrypt_data(current_user.canvas_session_cookie)
+            canvas_url = current_user.canvas_instance_url or canvas_url
+        
+        if not session_cookie:
+            raise HTTPException(
+                status_code=400,
+                detail="Canvas session cookie is required. Please provide a Canvas session cookie to access course files."
+            )
+        
+        # Create scraper
+        scraper = CanvasScraper(
+            base_url=canvas_url,
+            session_cookie=session_cookie
+        )
+        
+        # Get files from the course
+        try:
+            files_data = scraper.get_course_files(request.course_id)
+        except Exception as e:
+            print(f"Error in get_course_files: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to fetch course files: {str(e)}"
+            )
+        
+        # Convert to response format
+        files = [
+            CourseFile(
+                name=f.get('name', 'Unknown'),
+                url=f.get('url', ''),
+                size=f.get('size'),
+                content_type=f.get('content_type'),
+                updated_at=f.get('updated_at')
+            )
+            for f in files_data if f.get('url')  # Only include files with valid URLs
+        ]
+        
+        if len(files) == 0:
+            return CourseFilesResponse(
+                success=True,
+                files=[],
+                count=0,
+                message="No files found in course. This may be because the course has no files, or the Canvas session may need to be refreshed."
+            )
+        
+        return CourseFilesResponse(
+            success=True,
+            files=files,
+            count=len(files),
+            message=f"Found {len(files)} files in course"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch course files: {str(e)}"
         )
 
 

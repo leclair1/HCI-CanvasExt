@@ -1,4 +1,4 @@
-import { Home, BookOpen, Calendar, TrendingUp, Sparkles, Bot, Sun, Moon, User, Settings, LogOut } from "lucide-react";
+import { Home, BookOpen, Calendar, TrendingUp, Sparkles, Bot, Sun, Moon, User, Settings, LogOut, Key } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
 interface NavbarProps {
@@ -7,9 +7,10 @@ interface NavbarProps {
   isDarkMode: boolean;
   onToggleDarkMode: () => void;
   onLogout: () => void;
+  onShowCanvasPrompt?: () => void;
 }
 
-export default function Navbar({ currentView, onNavigate, isDarkMode, onToggleDarkMode, onLogout }: NavbarProps) {
+export default function Navbar({ currentView, onNavigate, isDarkMode, onToggleDarkMode, onLogout, onShowCanvasPrompt }: NavbarProps) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -147,6 +148,18 @@ export default function Navbar({ currentView, onNavigate, isDarkMode, onToggleDa
                   <Settings className="size-4" />
                   Profile Settings
                 </button>
+                {onShowCanvasPrompt && (
+                  <button
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      onShowCanvasPrompt();
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2 text-sm text-foreground hover:bg-accent/20 transition-colors"
+                  >
+                    <Key className="size-4" />
+                    Canvas Session
+                  </button>
+                )}
                 <div className="h-px bg-border my-2" />
                 <button
                   onClick={() => {

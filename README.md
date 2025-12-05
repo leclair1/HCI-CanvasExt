@@ -8,6 +8,8 @@ A multi-user web application that integrates with Canvas LMS to help students st
 - **Automatic Session Validation**: System automatically checks and prompts for Canvas session updates when expired
 - **Assignment Tracking**: Assignments automatically sync on every login and display in real-time
 - **AI Flashcard Generation**: Uses Groq AI to generate high-quality flashcards from course content
+- **Files Tab Scanning**: Option to scan and use files from Canvas Files tab for flashcards, quizzes, and AI tutor
+- **OCR Support**: Automatic OCR for image-based PDFs that don't contain extractable text
 - **Multi-User Support**: Each user has their own courses, modules, and study materials
 - **Secure Authentication**: JWT-based auth with encrypted Canvas session storage
 - **Modern UI**: Built with React + TypeScript for a smooth user experience
@@ -41,6 +43,10 @@ HCI-CanvasExt/
 - Docker & Docker Compose
 - Canvas LMS account
 - Groq API key (free at https://console.groq.com/keys)
+- **For OCR support (optional)**: Tesseract OCR installed on your system
+  - **Windows**: Download from [GitHub](https://github.com/UB-Mannheim/tesseract/wiki) and add to PATH
+  - **macOS**: `brew install tesseract`
+  - **Linux**: `sudo apt-get install tesseract-ocr` (Ubuntu/Debian) or `sudo yum install tesseract` (RHEL/CentOS)
 
 ### 1. Setup Environment Variables
 
@@ -197,9 +203,28 @@ The system automatically syncs your Canvas assignments:
 3. **Course Details**: See modules and course-specific assignments
 4. **Generate Flashcards**: 
    - Select a module
+   - Optionally enable "Include Files Tab" to scan Canvas Files tab
    - Click "Generate Flashcards"
-   - AI creates flashcards from PDFs and content
+   - AI creates flashcards from PDFs and content (with automatic OCR for image-based PDFs)
 5. **Study**: Review flashcards with flip animations
+
+### Files Tab Scanning
+
+The system can now scan the Canvas Files tab to find additional course materials:
+
+- **Enable in API**: Set `include_files_tab: true` in flashcard, quiz, or AI tutor requests
+- **Automatic Detection**: Files from the Files tab are automatically included when enabled
+- **Works with**: Flashcards, Quizzes, and AI Tutor features
+- **API Endpoint**: `POST /api/v1/canvas/files` to manually fetch course files
+
+### OCR Support for PDFs
+
+The system automatically detects and processes image-based PDFs:
+
+- **Automatic Detection**: If a PDF has less than 100 characters of extractable text, OCR is attempted
+- **Fallback**: If direct text extraction fails, OCR is used as a backup
+- **Requirements**: Tesseract OCR must be installed on the system (see Prerequisites)
+- **Performance**: OCR is slower but enables text extraction from scanned documents and image-based PDFs
 
 ### API Endpoints
 
@@ -211,7 +236,10 @@ Key endpoints:
 - `GET /api/v1/courses` - Get user's courses
 - `GET /api/v1/modules/course/{id}` - Get course modules
 - `GET /api/v1/assignments?course_id={id}` - Get assignments (filtered by course)
-- `POST /api/v1/flashcards/generate` - Generate flashcards from module
+- `POST /api/v1/flashcards/generate` - Generate flashcards from module (supports `include_files_tab` option)
+- `POST /api/v1/quizzes/generate` - Generate quiz questions from module (supports `include_files_tab` option)
+- `POST /api/v1/chat/` - AI Tutor chat (supports `include_files_tab` option)
+- `POST /api/v1/canvas/files` - Get files from Canvas Files tab
 
 ## 🔒 Security
 

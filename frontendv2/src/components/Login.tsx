@@ -27,12 +27,20 @@ export default function Login({ onLogin, onSwitchToSignup }: LoginProps) {
       tokenManager.setUser(response.user);
       
       // Store Canvas session status for App.tsx to handle
-      if (response.canvas_session_valid !== undefined) {
-        sessionStorage.setItem("canvas_session_valid", String(response.canvas_session_valid));
-      }
-      if (response.has_canvas_session !== undefined) {
-        sessionStorage.setItem("has_canvas_session", String(response.has_canvas_session));
-      }
+      // Use explicit boolean conversion to ensure correct string values
+      const sessionValid = response.canvas_session_valid === true;
+      const hasSession = response.has_canvas_session === true;
+      
+      // Store in sessionStorage with a flag to trigger prompt check
+      sessionStorage.setItem("canvas_session_valid", String(sessionValid));
+      sessionStorage.setItem("has_canvas_session", String(hasSession));
+      sessionStorage.setItem("check_canvas_session", "true"); // Flag to trigger check
+      
+      console.log("Login successful - Canvas session status:", { 
+        valid: sessionValid, 
+        hasSession: hasSession,
+        shouldShowPrompt: !sessionValid || !hasSession
+      });
       
       // Success! Navigate to dashboard
       onLogin();

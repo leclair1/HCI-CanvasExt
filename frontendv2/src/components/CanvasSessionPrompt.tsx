@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, AlertCircle, Info } from "lucide-react";
 import { authAPI, tokenManager } from "../lib/api";
 
@@ -19,7 +19,21 @@ export default function CanvasSessionPrompt({
   const [error, setError] = useState("");
   const [showInstructions, setShowInstructions] = useState(false);
 
-  if (!isOpen) return null;
+  // Debug logging
+  useEffect(() => {
+    console.log("CanvasSessionPrompt isOpen changed to:", isOpen);
+    if (isOpen) {
+      console.log("CanvasSessionPrompt SHOULD BE VISIBLE!");
+    }
+  }, [isOpen]);
+  
+  // Always render the component structure, but conditionally show content
+  // This ensures the component is mounted and can receive updates
+  if (!isOpen) {
+    return null;
+  }
+  
+  console.log("CanvasSessionPrompt rendering content with isOpen:", isOpen);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,8 +65,10 @@ export default function CanvasSessionPrompt({
     onClose();
   };
 
+  console.log("CanvasSessionPrompt render - isOpen:", isOpen);
+  
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ zIndex: 9999 }}>
       {/* Glossy Backdrop */}
       <div 
         className="absolute inset-0 bg-background/80 backdrop-blur-md"

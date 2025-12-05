@@ -3,7 +3,7 @@ import { ChevronLeft, Bot, Send, Loader2, FileText } from "lucide-react";
 
 interface AITutorProps {
   onBack: () => void;
-  moduleId: number;
+  moduleId: number | null;
   selectedFiles: string[];
   courseName: string;
 }
@@ -102,7 +102,7 @@ export default function AITutor({ onBack, moduleId, selectedFiles, courseName }:
 
     try {
       const { chatAPI } = await import("../lib/api");
-      const result = await chatAPI.generateQuestion(moduleId, selectedFiles);
+      const result = await chatAPI.generateQuestion(moduleId, selectedFiles, false);
       
       setQuestions(prev => [...prev, result.question]);
       console.log("Question generated:", result.question);
@@ -137,7 +137,8 @@ export default function AITutor({ onBack, moduleId, selectedFiles, courseName }:
         userAnswer,
         moduleId,
         selectedFiles,
-        gradingMode
+        gradingMode,
+        false
       );
       
       setGradingResult(result);

@@ -11,6 +11,16 @@ from PyPDF2 import PdfReader
 import io
 from groq import Groq
 from app.core.config import settings
+import os
+
+# OCR imports (optional - will fail gracefully if not installed)
+try:
+    from pdf2image import convert_from_bytes
+    import pytesseract
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+    print("Warning: OCR libraries not available. Install pdf2image and pytesseract for OCR support.")
 
 # Groq API Configuration
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -69,15 +79,60 @@ def extract_text_from_url(url: str, session_cookie: str, canvas_url: str) -> str
                 print(f"PDF found! Size: {len(response.content)} bytes")
                 pdf_reader = PdfReader(io.BytesIO(response.content))
                 text = ""
+                
+                # First, try to extract text directly
                 for i, page in enumerate(pdf_reader.pages):
                     page_text = page.extract_text()
                     text += page_text + "\n"
                     if i == 0:  # Log first page sample
                         print(f"First page sample: {page_text[:200]}...")
+                
+                # Check if we got meaningful text (more than just whitespace and minimal content)
+                text_stripped = text.strip()
+                meaningful_text = ''.join(c for c in text_stripped if c.isalnum())
+                
+                # If we have less than 100 alphanumeric characters, the PDF might be image-based
+                # Try OCR if available
+                if len(meaningful_text) < 100 and OCR_AVAILABLE:
+                    print(f"PDF appears to be image-based (only {len(meaningful_text)} chars extracted). Attempting OCR...")
+                    try:
+                        # Convert PDF pages to images
+                        images = convert_from_bytes(response.content, dpi=300)
+                        ocr_text = ""
+                        
+                        for i, image in enumerate(images):
+                            print(f"  Processing page {i+1}/{len(images)} with OCR...")
+                            # Use pytesseract to extract text
+                            page_ocr_text = pytesseract.image_to_string(image, lang='eng')
+                            ocr_text += page_ocr_text + "\n"
+                        
+                        # If OCR extracted more text, use it
+                        ocr_meaningful = ''.join(c for c in ocr_text if c.isalnum())
+                        if len(ocr_meaningful) > len(meaningful_text):
+                            print(f"OCR extracted {len(ocr_meaningful)} characters (vs {len(meaningful_text)} from direct extraction)")
+                            text = ocr_text
+                        else:
+                            print(f"OCR didn't improve extraction ({len(ocr_meaningful)} vs {len(meaningful_text)}), using original")
+                    except Exception as ocr_error:
+                        print(f"OCR failed: {ocr_error}. Using original text extraction.")
+                        # Continue with original text even if OCR fails
+                
                 print(f"Total extracted: {len(text)} characters from {len(pdf_reader.pages)} pages")
                 return text
             except Exception as e:
                 print(f"PDF extraction error: {e}")
+                # If direct extraction fails and OCR is available, try OCR only
+                if OCR_AVAILABLE:
+                    try:
+                        print("Direct extraction failed, trying OCR...")
+                        images = convert_from_bytes(response.content, dpi=300)
+                        ocr_text = ""
+                        for image in images:
+                            ocr_text += pytesseract.image_to_string(image, lang='eng') + "\n"
+                        print(f"OCR extracted {len(ocr_text)} characters")
+                        return ocr_text
+                    except Exception as ocr_error:
+                        print(f"OCR also failed: {ocr_error}")
                 return ""
         
         # If it's HTML
